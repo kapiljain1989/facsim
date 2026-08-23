@@ -218,6 +218,12 @@ Measured on a 2-day run: ClickHouse stored 1.68 M readings in **6.5 MB —
 
 Everything lives in `config/`. Nothing about the factory is hard-coded.
 
+Building a different factory — new equipment, a new product, a different
+plant entirely? [docs/CONFIGURING_A_FACTORY.md](docs/CONFIGURING_A_FACTORY.md)
+is the walkthrough: the dependency order to write files in, a worked example,
+and the gotchas that aren't obvious from the schema (WIP sizing, duty classes,
+alarm headroom, incubation windows). This section is the reference table.
+
 | File | Declares |
 |---|---|
 | `plant.yaml` | identity, timezone, seed, cadences, ambient environment |
