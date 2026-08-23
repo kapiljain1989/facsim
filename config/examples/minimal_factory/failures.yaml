@@ -1,0 +1,69 @@
+hazard_scale: 9.0    # deliberately high: this example is meant to show the
+                     # full failure chain within a short demonstration run
+max_concurrent_modes: 1
+
+hazard_factors:
+  age: {intercept: 1.0, terms: [{input: age_years, coef: 0.08}]}
+  operating_hours: {intercept: 1.0, terms: [{input: operating_khours, coef: 0.05}]}
+  maintenance_debt: {intercept: 1.0, terms: [{input: pm_overdue_ratio, coef: 1.0}], clip_max: 4.0}
+  load: {intercept: 0.6, terms: [{input: load_factor, coef: 0.4}]}
+  environment: {intercept: 0.9, terms: [{input: environment_stress, coef: 0.3}]}
+  operator: {intercept: 0.95, terms: [{input: operator_inexperience, coef: 0.35}]}
+
+failure_modes:
+  - id: AGITATOR_BEARING
+    category: MECHANICAL
+    description: Agitator shaft bearing wear.
+    sensor_profiles: [agitator]
+    mtbf_operating_hours: 2200.0
+    weibull_beta: 2.3
+    incubation_hours_min: 8.0
+    incubation_hours_max: 72.0
+    severity: MAJOR
+    root_cause: AGITATOR_BEARING_WEAR
+    root_cause_description: Shaft bearing wear from seal leakage into the housing.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: vibration, delta_fraction: 1.05, curve: exponential, sigma_growth: 0.6}
+      - {tag: motor_current, delta_fraction: 0.20, curve: exponential, sigma_growth: 0.2}
+      - {tag: temperature, delta_fraction: 0.18, delta_absolute: 6.0, curve: late_knee, sigma_growth: 0.15}
+    effects:
+      reject_rate_add: 0.05
+      process_variability_gain: 0.5
+      process_parameter_shifts: {rpm: -14.0}
+    repair: {duration_hours: 5.0, cost: 900.0, parts: [bearing, shaft seal], technicians: 1}
+
+  - id: FILL_PUMP_FAULT
+    category: MECHANICAL
+    description: Filling pump wear reducing delivered volume.
+    equipment_classes: [bottle_filler]
+    mtbf_operating_hours: 1800.0
+    weibull_beta: 2.0
+    incubation_hours_min: 6.0
+    incubation_hours_max: 60.0
+    severity: MAJOR
+    root_cause: FILL_PUMP_WEAR
+    root_cause_description: Piston seal wear reducing displaced volume per stroke.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: pump_pressure, delta_fraction: -0.30, curve: exponential, sigma_growth: 0.35}
+      - {tag: fill_volume_ml, delta_fraction: -0.035, curve: linear, sigma_growth: 0.5}
+    effects:
+      reject_rate_add: 0.06
+      process_variability_gain: 0.45
+      process_parameter_shifts: {fill_volume_ml: -2.8}
+    repair: {duration_hours: 3.0, cost: 480.0, parts: [piston seal kit], technicians: 1}
+
+  - id: SUPPLY_TRIP
+    category: ELECTRICAL
+    description: Supply transient tripping the drive; nothing to observe first.
+    mtbf_operating_hours: 9000.0
+    weibull_beta: 1.0
+    incubation_hours_min: 0.05
+    incubation_hours_max: 0.2
+    severity: MINOR
+    root_cause: SUPPLY_TRANSIENT
+    root_cause_description: Voltage dip on the incoming feed.
+    detectable: false
+    effects: {reject_rate_add: 0.01}
+    repair: {duration_hours: 0.75, cost: 60.0, parts: [], technicians: 1}

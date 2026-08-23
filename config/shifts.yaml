@@ -1,0 +1,33 @@
+# Shift model. Shift C crosses midnight, which is handled by the scheduler
+# rather than by assuming start < end.
+
+absenteeism_rate: 0.04
+overtime_probability: 0.08
+overtime_duration_min: 60.0
+clock_in_jitter_min: 8.0
+clock_out_jitter_min: 6.0
+
+shifts:
+  - code: A
+    name: Morning
+    start: "06:00"
+    end: "14:00"
+    breaks:
+      - {label: TEA, start: "08:30", duration_min: 15}
+      - {label: LUNCH, start: "11:00", duration_min: 30}
+
+  - code: B
+    name: Afternoon
+    start: "14:00"
+    end: "22:00"
+    breaks:
+      - {label: TEA, start: "16:30", duration_min: 15}
+      - {label: DINNER, start: "19:00", duration_min: 30}
+
+  - code: C
+    name: Night
+    start: "22:00"
+    end: "06:00"
+    breaks:
+      - {label: TEA, start: "00:30", duration_min: 15}
+      - {label: MEAL, start: "03:00", duration_min: 30}

@@ -1,0 +1,10 @@
+scenarios:
+  - id: NORMAL
+    description: Baseline operation.
+    duration_hours: 24.0
+    actions: []
+  - id: PUMP_WEAR
+    description: A filling pump wears out mid-shift.
+    duration_hours: 36.0
+    actions:
+      - {type: inject_failure, at_hours: 2.0, equipment_class: bottle_filler, failure_mode: FILL_PUMP_FAULT, severity: MAJOR}

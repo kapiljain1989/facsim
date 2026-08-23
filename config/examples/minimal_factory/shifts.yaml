@@ -1,0 +1,16 @@
+# Two twelve-hour shifts rather than three eight-hour ones. NIGHT crosses midnight.
+absenteeism_rate: 0.06
+overtime_probability: 0.10
+overtime_duration_min: 45.0
+clock_in_jitter_min: 10.0
+shifts:
+  - code: DAY
+    name: Day
+    start: "06:00"
+    end: "18:00"
+    breaks: [{label: LUNCH, start: "12:00", duration_min: 40}]
+  - code: NIGHT
+    name: Night
+    start: "18:00"
+    end: "06:00"
+    breaks: [{label: MEAL, start: "23:30", duration_min: 40}]

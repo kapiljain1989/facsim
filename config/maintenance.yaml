@@ -1,0 +1,26 @@
+# Maintenance policy.
+#
+# Maintenance is a feedback loop, not a log: deferring PM accrues maintenance
+# debt, which raises the hazard factor in failures.yaml, which makes a failure
+# more likely. Repairs then reduce the degradation index. That loop is what makes
+# "maintenance history affects future failure probability" (§21) true in the data
+# rather than merely recorded.
+
+types: [PREVENTIVE, CORRECTIVE, EMERGENCY, PREDICTIVE]
+
+technician_pool: 8
+pm_lead_time_hours: 24.0
+
+# Deferral is what creates the overdue-PM population that later shows up as
+# evidence in RCA.
+pm_deferral_probability: 0.18
+pm_deferral_hours: 72.0
+
+# When a machine raises a warning, this is the chance the plant acts on it before
+# the scheduled fault arrives — which is how failures get AVERTED.
+predictive_response_probability: 0.45
+predictive_response_delay_hours: 8.0
+
+corrective_delay_hours: 1.0
+hourly_labour_cost: 60.0
+corrective_effectiveness: 1.0

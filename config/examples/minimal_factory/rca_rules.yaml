@@ -1,0 +1,57 @@
+fallback_root_cause: UNDETERMINED
+verification_batches: 2
+
+evidence_rules:
+  - {id: VIB_UP, description: Vibration trending up, tag: vibration, min_delta_fraction: 0.25, weight: 1.5}
+  - {id: CUR_UP, description: Motor current trending up, tag: motor_current, min_delta_fraction: 0.08, weight: 1.0}
+  - {id: TEMP_UP, description: Temperature trending up, tag: temperature, min_delta_fraction: 0.10, weight: 1.0}
+  - {id: PRESS_DOWN, description: Pump pressure falling, tag: pump_pressure, min_delta_fraction: -0.10, weight: 1.6}
+  - {id: FILL_DOWN, description: Fill volume falling, tag: fill_volume_ml, min_delta_fraction: -0.008, weight: 1.5}
+  - {id: PM_LATE, description: Preventive maintenance overdue, signal: pm_overdue_hours, min_value: 24.0, weight: 1.2}
+  - {id: ALARMS, description: Alarms before the stop, signal: alarm_count, min_value: 2.0, weight: 0.9}
+
+rules:
+  - id: RCA-AGITATOR
+    root_cause: AGITATOR_BEARING_WEAR
+    categories: [MECHANICAL]
+    evidence: [VIB_UP, CUR_UP, TEMP_UP, PM_LATE]
+    min_score: 2.0
+    fishbone_category: MACHINE
+    five_why:
+      - Why did the mixer stop? The agitator bearing seized.
+      - Why did it seize? It had worn past its clearance.
+      - Why did it wear? Product ingress past the shaft seal.
+      - Why did product get in? The seal was beyond its service life.
+      - Why was it not replaced? Seal replacement was not on the PM checklist.
+    corrective_action: Replace the bearing and shaft seal; verify vibration returns to baseline.
+    preventive_action: Add shaft-seal replacement to the PM checklist and trend vibration.
+
+  - id: RCA-FILL-PUMP
+    root_cause: FILL_PUMP_WEAR
+    categories: [MECHANICAL]
+    evidence: [PRESS_DOWN, FILL_DOWN]
+    min_score: 1.5
+    fishbone_category: MACHINE
+    five_why:
+      - Why did fill volume drift low? The pump delivered less per stroke.
+      - Why? The piston seal had worn.
+      - Why? Abrasive syrup solids accelerated seal wear.
+      - Why was that not anticipated? Seal life was set for water-like duty.
+      - Why? The duty change was never reflected in the maintenance plan.
+    corrective_action: Replace the piston seal kit and re-verify fill volume.
+    preventive_action: Shorten the seal interval for syrup duty and add a fill-weight check each hour.
+
+  - id: RCA-SUPPLY
+    root_cause: SUPPLY_TRANSIENT
+    categories: [ELECTRICAL]
+    evidence: [ALARMS]
+    min_score: 0.85
+    fishbone_category: ENVIRONMENT
+    five_why:
+      - Why did the line stop? The drive tripped.
+      - Why? Incoming voltage dipped below its ride-through threshold.
+      - Why did that stop it? Ride-through was not configured.
+      - Why not? Default drive parameters were left in place.
+      - Why? Commissioning had no power-quality requirement.
+    corrective_action: Restart and verify in-process product.
+    preventive_action: Configure drive ride-through and monitor power quality.

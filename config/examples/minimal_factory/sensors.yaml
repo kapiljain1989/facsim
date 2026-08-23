@@ -1,0 +1,92 @@
+# One profile, with tag names this plant uses. Nothing here overlaps the
+# solid-dose plant's vocabulary, which is the point.
+default_rate_s: 120.0
+
+profiles:
+  agitator:
+    - tag: rpm
+      unit: rpm
+      baseline: 120.0
+      sigma: 1.8
+      rho: 0.90
+      hard_min: 0.0
+      hard_max: 260.0
+      warn_low: 85.0
+      warn_high: 160.0
+      process_parameter: true
+      state_factors:
+        offline: {mult: 0.0, sigma_mult: 0.0}
+        idle: {mult: 0.0, sigma_mult: 0.0}
+        maintenance: {mult: 0.0, sigma_mult: 0.0}
+        warning: {mult: 0.94, sigma_mult: 2.0}
+
+    - tag: batch_time
+      unit: min
+      baseline: 30.0
+      sigma: 0.9
+      rho: 0.78
+      hard_min: 0.0
+      hard_max: 180.0
+      warn_high: 46.0
+      process_parameter: true
+      state_factors:
+        offline: {mult: 0.0, sigma_mult: 0.0}
+        idle: {mult: 0.0, sigma_mult: 0.0}
+        maintenance: {mult: 0.0, sigma_mult: 0.0}
+
+    - tag: motor_current
+      unit: A
+      baseline: 8.4
+      sigma: 0.3
+      rho: 0.93
+      drift_per_day: 0.012
+      drift_limit: 0.8
+      health_sensitivity: 0.20
+      hard_min: 0.0
+      hard_max: 30.0
+      warn_high: 12.5
+      alarm_high: 15.5
+      state_factors:
+        offline: {mult: 0.0, sigma_mult: 0.0}
+        idle: {mult: 0.08, sigma_mult: 0.4}
+        maintenance: {mult: 0.04, sigma_mult: 0.2}
+        warning: {mult: 1.10, sigma_mult: 1.9}
+
+    - tag: vibration
+      unit: mm/s
+      baseline: 1.8
+      sigma: 0.14
+      rho: 0.94
+      drift_per_day: 0.005
+      drift_limit: 0.4
+      health_sensitivity: 0.88
+      hard_min: 0.0
+      hard_max: 24.0
+      warn_high: 4.0
+      alarm_high: 6.2
+      state_factors:
+        offline: {mult: 0.0, sigma_mult: 0.0}
+        idle: {mult: 0.10, sigma_mult: 0.3}
+        maintenance: {mult: 0.07, sigma_mult: 0.3}
+        warning: {mult: 1.16, sigma_mult: 1.8}
+      malfunction:
+        stuck_probability_per_day: 0.001
+        spike_probability: 0.0005
+
+    - tag: temperature
+      unit: degC
+      baseline: 32.0
+      sigma: 0.5
+      rho: 0.96
+      diurnal_amplitude: 0.9
+      ambient_coupling: 0.7
+      health_sensitivity: 0.20
+      hard_min: -5.0
+      hard_max: 95.0
+      warn_high: 45.0
+      alarm_high: 54.0
+      state_factors:
+        offline: {mult: 0.80, sigma_mult: 0.4}
+        idle: {mult: 0.87, sigma_mult: 0.5}
+        maintenance: {mult: 0.84, sigma_mult: 0.5}
+        warning: {mult: 1.07, sigma_mult: 1.5}

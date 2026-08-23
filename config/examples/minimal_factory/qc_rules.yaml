@@ -1,0 +1,54 @@
+results: [PASS, FAIL, OOS, OOT]
+reject_on_final_failure: true
+
+parameters:
+  - id: mix_uniformity
+    name: Mix Uniformity (RSD)
+    stage: MIXING
+    phase: IN_PROCESS
+    unit: '%'
+    target: 2.0
+    lower_limit: 0.0
+    upper_limit: 4.5
+    noise_sigma: 0.12
+    health_sensitivity: 0.20
+    sample_size: 5
+    transfer:
+      intercept: 3.56
+      terms:
+        - {input: rpm, coef: -0.008}
+        - {input: batch_time, coef: -0.020}
+      clip_min: 0.2
+
+  - id: fill_volume
+    name: Fill Volume
+    stage: FILLING
+    phase: IN_PROCESS
+    unit: ml
+    target: 100.0
+    lower_limit: 98.0
+    upper_limit: 102.0
+    noise_sigma: 0.35
+    health_sensitivity: -0.01
+    sample_size: 20
+    transfer:
+      intercept: 0.0
+      terms: [{input: fill_volume_ml, coef: 1.0}]
+      clip_min: 1.0
+
+  - id: final_assay
+    name: Assay (% Label Claim)
+    stage: MIXING
+    phase: FINAL
+    unit: '%'
+    target: 100.0
+    lower_limit: 95.0
+    upper_limit: 105.0
+    noise_sigma: 0.5
+    sample_size: 3
+    transfer:
+      intercept: 101.6
+      terms:
+        - {input: mix_uniformity, coef: -0.8}
+        - {input: material_variability, coef: -20.0}
+      clip_min: 50.0

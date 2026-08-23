@@ -1,0 +1,564 @@
+# Root-cause analysis rules.
+#
+# The RCA engine works ONLY from what the operational dataset records: the sensor
+# window before the fault, alarms, state history, maintenance history, operator
+# assignment, process parameters and QC results. It is given the failure's
+# CATEGORY (a real maintenance report would state the observed symptom class) but
+# never the failure mode or the true root cause — those live in the hidden
+# ground-truth dataset so RCA accuracy can be measured (§25).
+#
+# The engine is therefore deliberately FALLIBLE. Overlapping evidence between,
+# say, FILTER_BLOCKAGE and HEPA_FILTER_LOADING is intentional: a diagnostic
+# system that is right by construction cannot be evaluated.
+#
+# Evidence statistics are computed over the lookback window:
+#   delta           mean of the second half vs the first half, as a fraction
+#   variance_ratio  stddev of the second half / stddev of the first half
+# A negative threshold matches when the statistic falls BELOW it, so a decline
+# is evidence just as a rise is.
+
+fallback_root_cause: UNDETERMINED
+verification_batches: 3
+
+evidence_rules:
+  # ---- vibration -----------------------------------------------------------
+  - {id: VIB_RISE, description: Vibration trending upward, tag: vibration, min_delta_fraction: 0.25, weight: 1.0}
+  - {id: VIB_LARGE_RISE, description: Vibration sharply elevated, tag: vibration, min_delta_fraction: 0.60, weight: 1.6}
+  - {id: VIB_DROP, description: Vibration reading fell without a process change, tag: vibration, min_delta_fraction: -0.15, weight: 1.4}
+  - {id: VIB_ERRATIC, description: Vibration signal became erratic, tag: vibration, statistic: variance_ratio, min_delta_fraction: 2.2, weight: 1.5}
+
+  # ---- motor current -------------------------------------------------------
+  - {id: CURRENT_RISE, description: Motor current trending upward, tag: motor_current, min_delta_fraction: 0.08, weight: 1.0}
+  - {id: CURRENT_LARGE_RISE, description: Motor current well above nominal, tag: motor_current, min_delta_fraction: 0.25, weight: 1.6}
+  - {id: CURRENT_ERRATIC, description: Motor current unstable rather than trending, tag: motor_current, statistic: variance_ratio, min_delta_fraction: 1.8, weight: 1.5}
+
+  # ---- temperature ---------------------------------------------------------
+  - {id: TEMP_RISE, description: Temperature trending upward, tag: temperature, min_delta_fraction: 0.10, weight: 1.0}
+  - {id: TEMP_LARGE_RISE, description: Temperature substantially elevated, tag: temperature, min_delta_fraction: 0.22, weight: 1.5}
+  - {id: TEMP_ERRATIC, description: Temperature signal noisy without a load change, tag: temperature, statistic: variance_ratio, min_delta_fraction: 1.9, weight: 1.5}
+
+  # ---- torque / pressure ---------------------------------------------------
+  - {id: TORQUE_RISE, description: Drive torque trending upward, tag: torque, min_delta_fraction: 0.20, weight: 1.6}
+  - {id: PRESSURE_RISE, description: Chamber pressure trending upward, tag: pressure, min_delta_fraction: 0.20, weight: 1.5}
+  - {id: PRESSURE_ERRATIC, description: Pressure signal erratic, tag: pressure, statistic: variance_ratio, min_delta_fraction: 1.8, weight: 1.5}
+  - {id: STEAM_PRESSURE_DROP, description: Steam supply pressure falling, tag: steam_pressure, min_delta_fraction: -0.12, weight: 1.6}
+  - {id: CYCLE_TIME_RISE, description: Sterilisation cycle lengthening, tag: cycle_time, min_delta_fraction: 0.12, weight: 1.2}
+
+  # ---- air handling --------------------------------------------------------
+  - {id: AIRFLOW_DROP, description: Airflow declining, tag: airflow, min_delta_fraction: -0.15, weight: 1.4}
+  - {id: FAN_SPEED_DROP, description: Fan speed declining, tag: fan_speed, min_delta_fraction: -0.08, weight: 1.0}
+  - {id: DP_DROP, description: Differential pressure cascade weakening, tag: differential_pressure, min_delta_fraction: -0.20, weight: 1.6}
+  - {id: HEPA_RISE, description: HEPA differential rising with filter loading, tag: HEPA_pressure, min_delta_fraction: 0.15, weight: 1.7}
+  - {id: HUMIDITY_RISE, description: Process air humidity rising, tag: humidity, min_delta_fraction: 0.15, weight: 1.5}
+  - {id: ROOM_TEMP_RISE, description: Room temperature rising, tag: room_temperature, min_delta_fraction: 0.06, weight: 1.6}
+  - {id: ROOM_HUMIDITY_RISE, description: Room humidity rising, tag: room_humidity, min_delta_fraction: 0.12, weight: 1.7}
+
+  # ---- drying / coating ----------------------------------------------------
+  - {id: INLET_TEMP_RISE, description: Inlet air temperature above setpoint, tag: inlet_temperature, min_delta_fraction: 0.10, weight: 1.6}
+  - {id: OUTLET_TEMP_RISE, description: Outlet air temperature rising, tag: outlet_temperature, min_delta_fraction: 0.08, weight: 1.2}
+  - {id: SPRAY_PRESSURE_DROP, description: Spray pressure falling, tag: spray_pressure, min_delta_fraction: -0.15, weight: 1.6}
+  - {id: PUMP_SPEED_DROP, description: Pump speed falling, tag: pump_speed, min_delta_fraction: -0.12, weight: 1.3}
+  - {id: SPRAY_RATE_DROP, description: Delivered spray rate falling, tag: spray_rate, min_delta_fraction: -0.15, weight: 1.4}
+
+  # ---- speed / packaging ---------------------------------------------------
+  - {id: LINE_SPEED_DROP, description: Line speed below setpoint, tag: line_speed, min_delta_fraction: -0.10, weight: 1.3}
+  - {id: FOIL_TENSION_DROP, description: Web tension falling, tag: foil_tension, min_delta_fraction: -0.18, weight: 1.6}
+  - {id: TURRET_SPEED_DROP, description: Turret speed below setpoint, tag: turret_speed, min_delta_fraction: -0.07, weight: 1.4}
+  - {id: MACHINE_SPEED_DROP, description: Machine speed below setpoint, tag: machine_speed, min_delta_fraction: -0.07, weight: 1.4}
+
+  # ---- weighing ------------------------------------------------------------
+  - {id: WEIGHT_DRIFT, description: Indicated tablet weight drifting, tag: tablet_weight, min_delta_fraction: 0.015, weight: 1.5}
+  - {id: WEIGHT_ERRATIC, description: Indicated weight erratic, tag: tablet_weight, statistic: variance_ratio, min_delta_fraction: 1.9, weight: 1.4}
+  - {id: DISPENSED_WEIGHT_DRIFT, description: Dispensed weight drifting, tag: dispensed_weight, min_delta_fraction: 0.006, weight: 1.5}
+  - {id: FILL_WEIGHT_DRIFT, description: Capsule fill weight drifting, tag: fill_weight, min_delta_fraction: 0.010, weight: 1.5}
+
+  # ---- non-sensor signals --------------------------------------------------
+  - {id: PM_OVERDUE, description: Preventive maintenance overdue, signal: pm_overdue_hours, min_value: 24.0, weight: 1.3}
+  - {id: PM_LONG_OVERDUE, description: Preventive maintenance long overdue, signal: pm_overdue_hours, min_value: 72.0, weight: 1.7}
+  - {id: NO_RECENT_MAINT, description: No maintenance touch for a long period, signal: hours_since_last_maintenance, min_value: 500.0, weight: 1.0}
+  - {id: REPEAT_REPAIRS, description: Repeated corrective repairs in 90 days, signal: corrective_repairs_90d, min_value: 2.0, weight: 1.4}
+  - {id: NOVICE_OPERATOR, description: Operating crew relatively inexperienced, signal: operator_inexperience, min_value: 0.55, weight: 1.2}
+  - {id: LONG_WARNING, description: Machine ran in warning for a long period, signal: warning_duration_hours, min_value: 4.0, weight: 1.0}
+  - {id: ALARMS, description: Multiple alarms before the stop, signal: alarm_count, min_value: 3.0, weight: 0.9}
+  - {id: BAD_QUALITY_DATA, description: Elevated fraction of bad-quality readings, signal: sensor_quality_bad_fraction, min_value: 0.05, weight: 1.6}
+  - {id: REJECTS_UP, description: Reject rate increased, signal: reject_rate_increase, min_value: 0.01, weight: 1.0}
+  - {id: AMBIENT_EXCURSION, description: Plant ambient excursion overlapped the window, signal: ambient_excursion_hours, min_value: 1.0, weight: 1.3}
+  - {id: MATERIAL_WAIT, description: Line waited on material, signal: material_wait_hours, min_value: 0.5, weight: 1.8}
+  - {id: SETUP_ERRORS, description: Setup errors recorded, signal: setup_error_count, min_value: 1.0, weight: 1.7}
+  - {id: PARAM_DEVIATION, description: Process parameters outside their window, signal: parameter_deviation_count, min_value: 1.0, weight: 1.6}
+  - {id: MISSED_CHECKS, description: In-process checks omitted, signal: missed_inspection_count, min_value: 1.0, weight: 1.8}
+  - {id: QC_FAILURES, description: QC failures recorded on affected batches, signal: qc_failure_count, min_value: 1.0, weight: 1.2}
+  - {id: HIGH_BATCH_REJECT, description: Batch reject rate abnormally high, signal: batch_reject_rate, min_value: 0.15, weight: 1.8}
+
+rules:
+  # ---- MECHANICAL ----------------------------------------------------------
+  - id: RCA-LUBRICATION
+    root_cause: INSUFFICIENT_LUBRICATION
+    categories: [MECHANICAL]
+    evidence: [VIB_LARGE_RISE, CURRENT_RISE, TEMP_RISE, PM_OVERDUE, PM_LONG_OVERDUE]
+    min_score: 2.6
+    fishbone_category: MACHINE
+    five_why:
+      - Why did the machine stop? A bearing fault tripped the drive.
+      - Why did the bearing fault? Vibration and bearing temperature rose progressively.
+      - Why did they rise? The bearing ran with inadequate lubricant film.
+      - Why was lubrication inadequate? The scheduled lubrication task was not performed on time.
+      - Why was it not performed? Preventive maintenance was deferred past its interval.
+    corrective_action: Replace the bearing set, re-lubricate and verify vibration returns to baseline.
+    preventive_action: Add continuous vibration trending with an alert at 1.5x baseline, and block PM deferral on this asset class.
+
+  - id: RCA-MOTOR-WINDING
+    root_cause: MOTOR_WINDING_DEGRADATION
+    categories: [MECHANICAL, ELECTRICAL]
+    evidence: [CURRENT_LARGE_RISE, TEMP_LARGE_RISE, VIB_RISE]
+    min_score: 2.4
+    fishbone_category: MACHINE
+    five_why:
+      - Why did the machine stop? The motor tripped on overcurrent.
+      - Why did current rise? Winding insulation resistance had degraded.
+      - Why did insulation degrade? Sustained thermal cycling above design temperature.
+      - Why was it running hot? Cooling and duty cycle were mismatched to the load.
+      - Why was that not detected? Motor temperature was trended but had no alert threshold.
+    corrective_action: Replace the motor assembly and verify insulation resistance.
+    preventive_action: Add a motor temperature alarm and annual insulation-resistance testing.
+
+  - id: RCA-GEAR-WEAR
+    root_cause: GEAR_TOOTH_WEAR
+    categories: [MECHANICAL]
+    evidence: [TORQUE_RISE, VIB_LARGE_RISE, CURRENT_RISE]
+    min_score: 2.8
+    fishbone_category: MACHINE
+    five_why:
+      - Why did the granulator stop? The gearbox failed under load.
+      - Why did it fail? Gear teeth had worn beyond their contact profile.
+      - Why did they wear? Cumulative contact fatigue from high-torque batches.
+      - Why was the torque high? Batch load and impeller speed sat at the top of range.
+      - Why was that allowed? No torque-trend limit existed in the recipe review.
+    corrective_action: Replace the gear set and gearbox oil; confirm torque returns to baseline.
+    preventive_action: Introduce a torque trend limit and gearbox oil analysis each quarter.
+
+  - id: RCA-PUMP-SEAL
+    root_cause: PUMP_SEAL_WEAR
+    categories: [MECHANICAL]
+    evidence: [SPRAY_PRESSURE_DROP, PUMP_SPEED_DROP, SPRAY_RATE_DROP]
+    min_score: 2.4
+    fishbone_category: MACHINE
+    five_why:
+      - Why did coating fail specification? Delivered spray rate fell below setpoint.
+      - Why did it fall? The pump was bypassing internally.
+      - Why bypassing? The elastomer seal had worn.
+      - Why had it worn? It had exceeded its service life in a solvent duty.
+      - Why was it not replaced? Seal replacement was not on the PM checklist.
+    corrective_action: Replace the pump seal kit and tubing; verify delivered rate against setpoint.
+    preventive_action: Add seal replacement to the PM checklist at a fixed running-hours interval.
+
+  - id: RCA-VALVE-EROSION
+    root_cause: VALVE_SEAT_EROSION
+    categories: [MECHANICAL]
+    evidence: [STEAM_PRESSURE_DROP, CYCLE_TIME_RISE, PRESSURE_ERRATIC]
+    min_score: 1.8
+    fishbone_category: MACHINE
+    five_why:
+      - Why did the sterilisation cycle lengthen? Steam pressure at the chamber fell.
+      - Why did it fall? The control valve was passing steam internally.
+      - Why was it passing? The valve seat had eroded.
+      - Why did it erode? Throttling at low lift caused wire-drawing.
+      - Why was it throttled there? The valve was oversized for the duty.
+    corrective_action: Replace the control valve and gasket set; requalify the cycle.
+    preventive_action: Resize the valve trim and add a steam-pressure trend alarm.
+
+  - id: RCA-BELT-TENSION
+    root_cause: BELT_TENSION_LOSS
+    categories: [MECHANICAL]
+    evidence: [LINE_SPEED_DROP, FOIL_TENSION_DROP, CURRENT_RISE]
+    min_score: 2.2
+    fishbone_category: MACHINE
+    five_why:
+      - Why did the packaging line reject packs? Web tension was unstable.
+      - Why was it unstable? The drive belt had lost tension.
+      - Why did it lose tension? The belt had elongated with service.
+      - Why was it not re-tensioned? It was already at the end of tensioner travel.
+      - Why was that not noticed? Belt condition was checked visually, not measured.
+    corrective_action: Replace the drive belt and reset tension to specification.
+    preventive_action: Replace belts on a running-hours schedule and log measured tension.
+
+  # ---- ELECTRICAL ----------------------------------------------------------
+  - id: RCA-OVERLOAD
+    root_cause: EXCESSIVE_MECHANICAL_LOAD
+    categories: [ELECTRICAL, PROCESS]
+    evidence: [CURRENT_LARGE_RISE, TEMP_RISE, REJECTS_UP]
+    min_score: 2.2
+    fishbone_category: METHOD
+    five_why:
+      - Why did the drive trip? Current exceeded the overload setting.
+      - Why was current high? Mechanical load was above the drive's rating.
+      - Why was the load high? Feed rate and batch size sat at the top of range.
+      - Why were they there? Throughput was prioritised over drive headroom.
+      - Why was there no limit? The recipe had no load ceiling defined.
+    corrective_action: Reset the overload relay and reduce feed rate to the validated range.
+    preventive_action: Define a load ceiling in the recipe and alarm on sustained current above 80% rating.
+
+  - id: RCA-VFD-CAPACITOR
+    root_cause: VFD_CAPACITOR_AGEING
+    categories: [ELECTRICAL]
+    evidence: [CURRENT_ERRATIC, ALARMS, NO_RECENT_MAINT]
+    min_score: 2.0
+    fishbone_category: MACHINE
+    five_why:
+      - Why did output become unstable? The drive could not hold commanded speed.
+      - Why not? DC-link ripple had increased.
+      - Why? Electrolytic capacitor ESR had risen with age.
+      - Why was it still in service? Drives were run to failure rather than replaced on age.
+      - Why? Drive age was not tracked as a maintenance trigger.
+    corrective_action: Replace the VFD module and verify stable speed regulation.
+    preventive_action: Track drive age and replace DC-link capacitors at a defined service life.
+
+  - id: RCA-GRID-INTERRUPTION
+    root_cause: GRID_SUPPLY_INTERRUPTION
+    categories: [ELECTRICAL]
+    evidence: [ALARMS]
+    min_score: 0.85
+    fishbone_category: ENVIRONMENT
+    five_why:
+      - Why did production stop? All drives lost power simultaneously.
+      - Why? Incoming supply was interrupted.
+      - Why? An external distribution fault occurred.
+      - Why did it affect production? Affected equipment was not on backup supply.
+      - Why not? Only utilities were classified as critical loads.
+    corrective_action: Restart equipment per the power-restoration procedure and verify in-process material.
+    preventive_action: Reclassify critical process loads and extend UPS/generator coverage.
+
+  - id: RCA-CONTROL-WIRING
+    root_cause: CONTROL_WIRING_FAULT
+    categories: [ELECTRICAL]
+    evidence: [REPEAT_REPAIRS, ALARMS, NO_RECENT_MAINT]
+    min_score: 1.9
+    fishbone_category: MACHINE
+    five_why:
+      - Why did the machine stop? A control circuit opened.
+      - Why? A terminal connection had loosened.
+      - Why? Thermal cycling and vibration relaxed the termination.
+      - Why was it not caught? Panel terminations were not torque-checked.
+      - Why not? Panel inspection was visual only.
+    corrective_action: Replace the contactor and terminal block, and torque-check all panel terminations.
+    preventive_action: Add thermographic panel survey and torque verification to the annual PM.
+
+  # ---- SENSOR / INSTRUMENT ------------------------------------------------
+  - id: RCA-TEMP-CALIBRATION
+    root_cause: SENSOR_CALIBRATION_DRIFT
+    categories: [SENSOR]
+    evidence: [TEMP_ERRATIC, BAD_QUALITY_DATA, NO_RECENT_MAINT]
+    min_score: 1.9
+    fishbone_category: MEASUREMENT
+    five_why:
+      - Why were readings questioned? Indicated temperature diverged from process behaviour.
+      - Why? The probe had drifted out of calibration.
+      - Why did it drift? The sensing element aged in a high-temperature duty.
+      - Why was it not recalibrated? It was outside its calibration interval.
+      - Why? Instrument calibration was not scheduled per asset.
+    corrective_action: Replace and recalibrate the temperature probe against a reference.
+    preventive_action: Introduce a per-instrument calibration schedule with automatic due-date alerts.
+
+  - id: RCA-PRESSURE-CALIBRATION
+    root_cause: PRESSURE_TRANSDUCER_DRIFT
+    categories: [SENSOR]
+    evidence: [PRESSURE_ERRATIC, BAD_QUALITY_DATA]
+    min_score: 1.8
+    fishbone_category: MEASUREMENT
+    five_why:
+      - Why was pressure control unstable? The transducer signal was unreliable.
+      - Why? Its zero point had drifted.
+      - Why? Diaphragm fatigue from repeated pressure cycling.
+      - Why was it not detected? No cross-check against a second instrument existed.
+      - Why not? Only one pressure measurement was installed.
+    corrective_action: Replace the pressure transducer and verify against a calibrated gauge.
+    preventive_action: Add a redundant pressure measurement with a deviation alarm between the two.
+
+  - id: RCA-ACCELEROMETER-MOUNT
+    root_cause: ACCELEROMETER_MOUNT_LOOSE
+    categories: [SENSOR]
+    evidence: [VIB_DROP, VIB_ERRATIC, BAD_QUALITY_DATA]
+    min_score: 2.0
+    fishbone_category: MEASUREMENT
+    five_why:
+      - Why did vibration readings fall while the machine ran normally? The sensor stopped tracking the housing.
+      - Why? Its mounting had loosened.
+      - Why? Stud torque relaxed under vibration.
+      - Why was that not noticed? A falling vibration reading was read as an improvement.
+      - Why? There was no sensor-health check distinct from machine health.
+    corrective_action: Re-mount the accelerometer to specified torque and verify response against a shaker.
+    preventive_action: Add a sensor-health rule that flags an unexplained drop in vibration amplitude.
+
+  - id: RCA-LOAD-CELL
+    root_cause: LOAD_CELL_CALIBRATION_DRIFT
+    categories: [SENSOR]
+    evidence: [WEIGHT_DRIFT, WEIGHT_ERRATIC, DISPENSED_WEIGHT_DRIFT, FILL_WEIGHT_DRIFT, QC_FAILURES]
+    min_score: 2.2
+    fishbone_category: MEASUREMENT
+    five_why:
+      - Why did weight results fail specification? Indicated weight no longer matched actual weight.
+      - Why? The load cell had drifted.
+      - Why? Load cell creep under sustained load.
+      - Why was it not caught? Daily verification used a single check weight.
+      - Why? The procedure predated the current specification width.
+    corrective_action: Replace the load cell and recalibrate across the working range.
+    preventive_action: Verify with a multi-point weight set each shift and trend the deviation.
+
+  # ---- PROCESS ------------------------------------------------------------
+  - id: RCA-COOLING
+    root_cause: COOLING_INSUFFICIENT
+    categories: [PROCESS]
+    evidence: [TEMP_LARGE_RISE, FAN_SPEED_DROP, AMBIENT_EXCURSION]
+    min_score: 2.0
+    fishbone_category: MACHINE
+    five_why:
+      - Why did the machine run hot? Heat removal fell below heat generation.
+      - Why? Cooling airflow was reduced.
+      - Why? The cooling path was fouled.
+      - Why was it fouled? Cleaning interval was longer than the fouling rate.
+      - Why? The interval was set without measuring fouling.
+    corrective_action: Clean the cooling circuit and replace the cooling fan and filter.
+    preventive_action: Shorten the cooling-path cleaning interval based on measured temperature rise.
+
+  - id: RCA-HEATER-DRIFT
+    root_cause: HEATER_CONTROL_DRIFT
+    categories: [PROCESS]
+    evidence: [INLET_TEMP_RISE, OUTLET_TEMP_RISE, PARAM_DEVIATION]
+    min_score: 2.2
+    fishbone_category: MACHINE
+    five_why:
+      - Why did moisture fall below specification? Inlet air ran hotter than setpoint.
+      - Why? The heater control loop overshot.
+      - Why? Its calibration had drifted.
+      - Why was that not caught? Only the setpoint was recorded, not the deviation.
+      - Why? Batch records captured setpoints rather than achieved values.
+    corrective_action: Replace the heater controller and requalify the drying step.
+    preventive_action: Record achieved-versus-setpoint deviation per batch and alarm on sustained offset.
+
+  - id: RCA-FILTER-BLOCKAGE
+    root_cause: FILTER_BLOCKAGE
+    categories: [PROCESS]
+    evidence: [AIRFLOW_DROP, FAN_SPEED_DROP, PM_OVERDUE]
+    min_score: 2.0
+    fishbone_category: MACHINE
+    five_why:
+      - Why did drying take longer? Process airflow was reduced.
+      - Why? The inlet filter bank was loaded with particulate.
+      - Why? It had passed its change-out point.
+      - Why was it not changed? Change-out was time-based, not pressure-based.
+      - Why? Differential pressure was not trended.
+    corrective_action: Replace the inlet filter set and confirm airflow returns to nominal.
+    preventive_action: Trend filter differential pressure and change filters on pressure rather than time.
+
+  - id: RCA-EXHAUST-RESTRICTION
+    root_cause: EXHAUST_RESTRICTION
+    categories: [PROCESS]
+    evidence: [PRESSURE_RISE, AIRFLOW_DROP]
+    min_score: 1.9
+    fishbone_category: MACHINE
+    five_why:
+      - Why did chamber pressure rise? Exhaust capacity was reduced.
+      - Why? The exhaust path was partially blocked.
+      - Why? A damper was not opening fully.
+      - Why? The damper actuator was binding.
+      - Why was it not detected? Damper position was commanded but not fed back.
+    corrective_action: Replace the damper actuator and verify full travel.
+    preventive_action: Add position feedback on exhaust dampers with a command-versus-actual alarm.
+
+  - id: RCA-DEHUMIDIFIER
+    root_cause: DEHUMIDIFIER_UNDERPERFORMANCE
+    categories: [PROCESS]
+    evidence: [HUMIDITY_RISE, AMBIENT_EXCURSION]
+    min_score: 1.7
+    fishbone_category: ENVIRONMENT
+    five_why:
+      - Why was process air humid? Moisture removal was insufficient.
+      - Why? The desiccant had saturated.
+      - Why? Regeneration was not keeping up with the moisture load.
+      - Why? Ambient humidity exceeded the design assumption.
+      - Why? Design load was set for average, not seasonal peak, conditions.
+    corrective_action: Replace the desiccant cartridge and verify outlet dew point.
+    preventive_action: Size dehumidification for seasonal peak load and monitor dew point continuously.
+
+  - id: RCA-DRIVE-CALIBRATION
+    root_cause: DRIVE_CONTROL_MISCALIBRATION
+    categories: [PROCESS]
+    evidence: [TURRET_SPEED_DROP, MACHINE_SPEED_DROP, LINE_SPEED_DROP, PARAM_DEVIATION]
+    min_score: 2.0
+    fishbone_category: MACHINE
+    five_why:
+      - Why did throughput fall short? Actual speed sat below commanded speed.
+      - Why? Drive scaling no longer matched the encoder.
+      - Why? Drive tuning had drifted after a service event.
+      - Why was it not verified? No post-service speed verification was required.
+      - Why? The procedure had no acceptance check.
+    corrective_action: Replace the encoder and re-scale the drive against measured speed.
+    preventive_action: Require a speed-verification step after any drive or encoder service.
+
+  # ---- MATERIAL ------------------------------------------------------------
+  - id: RCA-SUPPLY-DELAY
+    root_cause: SUPPLY_CHAIN_DELAY
+    categories: [MATERIAL]
+    evidence: [MATERIAL_WAIT]
+    min_score: 1.6
+    fishbone_category: MATERIAL
+    five_why:
+      - Why did the line stop? No material was available at the machine.
+      - Why? The dispensing queue had not released it.
+      - Why? Upstream delivery arrived late.
+      - Why? Reorder point did not cover supplier lead-time variability.
+      - Why? Safety stock was set on average lead time.
+    corrective_action: Expedite the material and restart the stage.
+    preventive_action: Recalculate safety stock from lead-time variability, not the mean.
+
+  - id: RCA-LOT-VARIABILITY
+    root_cause: SUPPLIER_LOT_VARIABILITY
+    categories: [MATERIAL]
+    evidence: [QC_FAILURES, REJECTS_UP, PARAM_DEVIATION]
+    min_score: 1.1
+    fishbone_category: MATERIAL
+    five_why:
+      - Why did in-process results scatter? Incoming material properties varied.
+      - Why? The supplier lot sat outside the usual band.
+      - Why was it accepted? Incoming testing covered identity, not processability.
+      - Why? The specification lacked particle-size and moisture limits.
+      - Why? The specification was inherited from the API monograph only.
+    corrective_action: Quarantine the remaining lot and adjust granulation for the current material.
+    preventive_action: Add particle-size and moisture limits to the incoming specification.
+
+  - id: RCA-LABEL-MIXUP
+    root_cause: DISPENSING_LABEL_MIX_UP
+    categories: [MATERIAL]
+    evidence: [HIGH_BATCH_REJECT, QC_FAILURES, SETUP_ERRORS]
+    min_score: 1.7
+    fishbone_category: METHOD
+    five_why:
+      - Why was the batch rejected outright? The wrong material had been charged.
+      - Why? Containers were mistaken during dispensing.
+      - Why? Two similar labels were staged together.
+      - Why? Staging did not separate similar materials.
+      - Why? There was no barcode verification at charging.
+    corrective_action: Reject the batch, reconcile all dispensed containers and requalify the area.
+    preventive_action: Introduce barcode verification at charge-in and physical segregation of similar materials.
+
+  # ---- HUMAN ---------------------------------------------------------------
+  - id: RCA-TRAINING
+    root_cause: INADEQUATE_OPERATOR_TRAINING
+    categories: [HUMAN]
+    evidence: [SETUP_ERRORS, NOVICE_OPERATOR, REJECTS_UP]
+    min_score: 1.6
+    fishbone_category: MANPOWER
+    five_why:
+      - Why was the machine set up incorrectly? The operator followed the wrong sequence.
+      - Why? They had not performed this setup unsupervised before.
+      - Why were they assigned? The shift was short-staffed.
+      - Why did that allow it? Certification was not enforced at assignment.
+      - Why? Machine assignment did not check the certification record.
+    corrective_action: Correct the setup, re-run in-process checks and retrain the operator.
+    preventive_action: Enforce machine certification at shift assignment and require supervised sign-off.
+
+  - id: RCA-PARAMETER-ENTRY
+    root_cause: PARAMETER_ENTRY_ERROR
+    categories: [HUMAN]
+    evidence: [PARAM_DEVIATION, REJECTS_UP, NOVICE_OPERATOR]
+    min_score: 1.5
+    fishbone_category: METHOD
+    five_why:
+      - Why did the process run off-target? A setpoint was entered incorrectly.
+      - Why was it accepted? The HMI allowed a value outside the validated range.
+      - Why? Recipe limits were advisory rather than enforced.
+      - Why? Limits were documented but not configured.
+      - Why? Recipe configuration and documentation were maintained separately.
+    corrective_action: Restore the validated setpoint and assess the material produced off-target.
+    preventive_action: Enforce recipe min/max at the HMI and reconcile configured limits against the master recipe.
+
+  - id: RCA-PROCEDURE
+    root_cause: PROCEDURE_NOT_FOLLOWED
+    categories: [HUMAN]
+    evidence: [MISSED_CHECKS, NOVICE_OPERATOR]
+    min_score: 1.7
+    fishbone_category: METHOD
+    five_why:
+      - Why was the deviation found late? A required in-process check was skipped.
+      - Why? The check interval clashed with a changeover.
+      - Why? The procedure assumed continuous running.
+      - Why? Changeover timing was not considered when the interval was set.
+      - Why? The procedure was written without line-side review.
+    corrective_action: Perform the missed checks retrospectively where possible and assess affected material.
+    preventive_action: Re-time in-process checks around changeovers and add an electronic prompt.
+
+  - id: RCA-OPERATOR-SLIP
+    root_cause: OPERATOR_SLIP
+    categories: [HUMAN]
+    evidence: [NOVICE_OPERATOR, REJECTS_UP, ALARMS]
+    min_score: 1.1
+    fishbone_category: MANPOWER
+    five_why:
+      - Why did the error occur? A manual step was performed out of sequence.
+      - Why? The operator was interrupted mid-task.
+      - Why? The task spanned two areas requiring the operator to leave the machine.
+      - Why? Material staging was remote from the machine.
+      - Why? Layout was optimised for storage, not for operation.
+    corrective_action: Correct the affected step and verify the in-process result.
+    preventive_action: Re-stage materials at the point of use and make the step interruption-tolerant.
+
+  # ---- ENVIRONMENTAL ------------------------------------------------------
+  - id: RCA-HEPA-LOADING
+    root_cause: HEPA_FILTER_LOADING
+    categories: [ENVIRONMENTAL]
+    evidence: [DP_DROP, HEPA_RISE, AIRFLOW_DROP, PM_OVERDUE]
+    min_score: 2.6
+    fishbone_category: ENVIRONMENT
+    five_why:
+      - Why did the room lose its pressure cascade? Supply airflow fell.
+      - Why? Terminal HEPA filters were loaded.
+      - Why? They were past their change-out point.
+      - Why were they not changed? Change-out was scheduled annually regardless of loading.
+      - Why? Filter differential pressure was recorded but not trended against a limit.
+    corrective_action: Replace the HEPA and prefilter sets and re-balance the room.
+    preventive_action: Trend filter differential pressure with a change-out alert, and re-qualify the cascade after each change.
+
+  - id: RCA-CHILLER
+    root_cause: CHILLER_CAPACITY_LOSS
+    categories: [ENVIRONMENTAL]
+    evidence: [ROOM_TEMP_RISE, AMBIENT_EXCURSION, TEMP_RISE]
+    min_score: 2.2
+    fishbone_category: ENVIRONMENT
+    five_why:
+      - Why did room temperature exceed its band? Cooling capacity fell short of load.
+      - Why? Available chilled-water capacity dropped.
+      - Why? Condenser performance degraded.
+      - Why? Condenser cleaning was overdue.
+      - Why? Utility PM was scheduled behind production PM.
+    corrective_action: Service the chiller and restore room temperature to its qualified band.
+    preventive_action: Give utility PM equal scheduling priority and monitor chiller approach temperature.
+
+  - id: RCA-DEHUMIDIFICATION
+    root_cause: DEHUMIDIFICATION_LOSS
+    categories: [ENVIRONMENTAL]
+    evidence: [ROOM_HUMIDITY_RISE, AMBIENT_EXCURSION]
+    min_score: 2.2
+    fishbone_category: ENVIRONMENT
+    five_why:
+      - Why did room humidity exceed its band? Moisture removal fell short.
+      - Why? The desiccant wheel underperformed.
+      - Why? Its drive belt was slipping.
+      - Why was that not seen? Wheel rotation was not monitored.
+      - Why? The unit had no rotation-proving sensor.
+    corrective_action: Replace the desiccant wheel belt and restore room humidity to its qualified band.
+    preventive_action: Fit a rotation-proving sensor and alarm on wheel stall.
+
+  - id: RCA-UTILITY-TRANSIENT
+    root_cause: UTILITY_TRANSIENT
+    categories: [ENVIRONMENTAL]
+    evidence: [ALARMS, REPEAT_REPAIRS]
+    min_score: 0.85
+    fishbone_category: ENVIRONMENT
+    five_why:
+      - Why did the drive trip briefly? Supply voltage dipped below the ride-through threshold.
+      - Why? A transient occurred on the incoming supply.
+      - Why did it stop the machine? The drive had no ride-through configured.
+      - Why not? Default drive parameters were used at commissioning.
+      - Why? Commissioning had no power-quality requirement.
+    corrective_action: Restart the drive and verify in-process material.
+    preventive_action: Configure drive ride-through and add power-quality monitoring at the incoming supply.

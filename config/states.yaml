@@ -1,0 +1,83 @@
+# Machine state model.
+#
+# Nothing in the Python engine knows these names. Add a state, rename one, or
+# rewire the transition table and the simulator adapts, because production, OEE
+# and downtime logic read the semantic ROLES below rather than state ids.
+
+states:
+  - id: OFFLINE
+    description: Powered down or outside any staffed shift.
+    production_rate_factor: 0.0
+    energy_factor: 0.02
+
+  - id: IDLE
+    description: Available and powered, waiting for work or an operator.
+    production_rate_factor: 0.0
+    energy_factor: 0.15
+
+  - id: STARTING
+    description: Ramping up to setpoints; partial output, unstable parameters.
+    production_rate_factor: 0.25
+    reject_rate_add: 0.010
+    energy_factor: 0.70
+
+  - id: RUNNING
+    description: Producing at nominal rate.
+    production_rate_factor: 1.0
+    energy_factor: 1.0
+
+  - id: WARNING
+    description: Producing, but a degradation threshold has been crossed.
+    production_rate_factor: 0.84
+    reject_rate_add: 0.018
+    energy_factor: 1.06
+
+  - id: FAULT
+    description: Stopped by an active failure; awaiting maintenance.
+    production_rate_factor: 0.0
+    energy_factor: 0.08
+
+  - id: MAINTENANCE
+    description: Under preventive, predictive or corrective maintenance.
+    production_rate_factor: 0.0
+    energy_factor: 0.20
+
+  - id: CLEANING
+    description: Cleaning between batches or products.
+    production_rate_factor: 0.0
+    energy_factor: 0.35
+
+  - id: CHANGEOVER
+    description: Product or format changeover, including setup.
+    production_rate_factor: 0.0
+    energy_factor: 0.30
+
+# Legal transitions. Anything absent is rejected at runtime, which is how an
+# impossible sequence (FAULT straight to RUNNING) becomes impossible in the data.
+transitions:
+  OFFLINE: [IDLE, MAINTENANCE]
+  IDLE: [STARTING, CLEANING, CHANGEOVER, MAINTENANCE, OFFLINE]
+  STARTING: [RUNNING, FAULT, IDLE]
+  RUNNING: [WARNING, FAULT, IDLE, CLEANING, CHANGEOVER, MAINTENANCE]
+  WARNING: [RUNNING, FAULT, MAINTENANCE, IDLE]
+  FAULT: [MAINTENANCE, IDLE]
+  MAINTENANCE: [IDLE, STARTING, OFFLINE]
+  CLEANING: [IDLE, STARTING]
+  CHANGEOVER: [IDLE, STARTING]
+
+# What the states MEAN. This indirection is the reason the engine never compares
+# against a state name.
+roles:
+  initial: OFFLINE
+  productive: [RUNNING, WARNING]      # counts toward produced quantity
+  downtime: [FAULT, MAINTENANCE]      # machine unavailable
+  idle: [IDLE]
+  warning: [WARNING]
+  fault: [FAULT]
+  maintenance: [MAINTENANCE]
+  cleaning: [CLEANING]
+  changeover: [CHANGEOVER]
+  offline: [OFFLINE]
+  starting: [STARTING]
+  requires_operator: [STARTING, RUNNING, WARNING, CLEANING, CHANGEOVER]
+  planned_stop: [CLEANING, CHANGEOVER, OFFLINE]   # excluded from OEE loading time

@@ -1,0 +1,1074 @@
+# Equipment classes and plant layout.
+#
+# §2 lists ~33 distinct equipment items while §11 defines 10 sensor-bearing
+# machine families. Those are modelled as two independent levels: an equipment
+# class per real item, and an OPTIONAL sensor profile it may share. No mapping
+# is imposed — a class can inherit a profile, patch it, or ignore profiles and
+# declare its sensors inline. All three appear below.
+#
+# `layout` instantiates machines per unit. The shipped layout totals exactly 100
+# machines across 10 units; change any count and the builder, rosters, OEE
+# rollups and tests all follow, because nothing reads a hard-coded number.
+
+equipment_classes:
+
+  # ---- UNIT-01 Raw Material Dispensing ------------------------------------
+  # Inline-only: dispensing equipment shares no profile with anything else.
+  - id: dispensing_booth
+    duty: coupled
+    stage_duration_min: 75.0
+    name: Dispensing Booth
+    nominal_rate_per_hour: 620.0
+    pm_interval_hours: 1080.0
+    base_reject_rate: 0.001
+    cleaning_duration_min: 25.0
+    sensors:
+      - tag: differential_pressure
+        unit: Pa
+        baseline: 12.5
+        sigma: 0.65
+        rho: 0.94
+        drift_per_day: -0.02
+        drift_limit: 2.0
+        health_sensitivity: -0.35
+        hard_min: -20.0
+        hard_max: 50.0
+        warn_low: 8.0
+        alarm_low: 5.0
+        state_factors:
+          offline: {mult: 0.1, sigma_mult: 0.5}
+          fault: {mult: 0.2, sigma_mult: 1.2}
+      - tag: airflow
+        unit: m3/h
+        baseline: 1250.0
+        sigma: 22.0
+        rho: 0.92
+        drift_per_day: -0.8
+        drift_limit: 60.0
+        health_sensitivity: -0.28
+        hard_min: 0.0
+        hard_max: 2200.0
+        warn_low: 950.0
+        alarm_low: 780.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          fault: {mult: 0.15, sigma_mult: 1.0}
+      - tag: temperature
+        unit: degC
+        baseline: 22.5
+        sigma: 0.25
+        rho: 0.97
+        diurnal_amplitude: 0.5
+        ambient_coupling: 0.9
+        health_sensitivity: 0.12
+        hard_min: 0.0
+        hard_max: 45.0
+        warn_high: 26.0
+        alarm_high: 28.0
+
+  - id: weighing_scale
+    stage_duration_min: 60.0
+    name: Electronic Weighing Scale
+    nominal_rate_per_hour: 340.0
+    pm_interval_hours: 720.0
+    base_reject_rate: 0.002
+    setup_duration_min: 10.0
+    sensors:
+      # The DISPENSING process parameter every downstream assay depends on.
+      - tag: dispensed_weight
+        unit: kg
+        baseline: 25.0
+        sigma: 0.035
+        rho: 0.70
+        drift_per_day: 0.004
+        drift_limit: 0.25
+        health_sensitivity: 0.10
+        hard_min: 0.0
+        hard_max: 200.0
+        warn_low: 24.6
+        warn_high: 25.4
+        alarm_low: 24.3
+        alarm_high: 25.7
+        process_parameter: true
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.0, sigma_mult: 0.0}
+          maintenance: {mult: 0.0, sigma_mult: 0.0}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 1.002, sigma_mult: 2.6}
+        malfunction:
+          stuck_probability_per_day: 0.0009
+          dropout_probability: 0.0002
+      - tag: temperature
+        unit: degC
+        baseline: 23.0
+        sigma: 0.3
+        rho: 0.96
+        ambient_coupling: 0.9
+        diurnal_amplitude: 0.5
+        hard_min: 0.0
+        hard_max: 45.0
+        warn_high: 27.0
+
+  - id: material_transfer
+    duty: coupled
+    stage_duration_min: 45.0
+    name: Material Transfer System
+    nominal_rate_per_hour: 900.0
+    pm_interval_hours: 900.0
+    base_reject_rate: 0.001
+    sensors:
+      - tag: motor_current
+        unit: A
+        baseline: 6.8
+        sigma: 0.25
+        rho: 0.92
+        drift_per_day: 0.010
+        drift_limit: 0.7
+        health_sensitivity: 0.20
+        hard_min: 0.0
+        hard_max: 25.0
+        warn_high: 10.0
+        alarm_high: 13.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.08, sigma_mult: 0.4}
+          starting: {mult: 1.3, sigma_mult: 3.2}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          maintenance: {mult: 0.04, sigma_mult: 0.2}
+          cleaning: {mult: 0.10, sigma_mult: 0.4}
+          changeover: {mult: 0.08, sigma_mult: 0.4}
+          warning: {mult: 1.09, sigma_mult: 1.9}
+      - tag: vibration
+        unit: mm/s
+        baseline: 1.55
+        sigma: 0.12
+        rho: 0.94
+        drift_per_day: 0.004
+        drift_limit: 0.35
+        health_sensitivity: 0.84
+        hard_min: 0.0
+        hard_max: 22.0
+        warn_high: 3.5
+        alarm_high: 5.5
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.09, sigma_mult: 0.3}
+          starting: {mult: 1.45, sigma_mult: 3.2}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          maintenance: {mult: 0.07, sigma_mult: 0.3}
+          cleaning: {mult: 0.14, sigma_mult: 0.4}
+          changeover: {mult: 0.10, sigma_mult: 0.4}
+          warning: {mult: 1.14, sigma_mult: 1.8}
+      - tag: temperature
+        unit: degC
+        baseline: 30.0
+        sigma: 0.45
+        rho: 0.96
+        ambient_coupling: 0.7
+        diurnal_amplitude: 0.7
+        health_sensitivity: 0.18
+        hard_min: -10.0
+        hard_max: 90.0
+        warn_high: 44.0
+        alarm_high: 52.0
+        state_factors:
+          offline: {mult: 0.78, sigma_mult: 0.4}
+          idle: {mult: 0.85, sigma_mult: 0.5}
+          warning: {mult: 1.06, sigma_mult: 1.4}
+
+  - id: dust_extraction
+    duty: continuous
+    stage_duration_min: 60.0
+    name: Dust Extraction System
+    sensor_profile: hvac
+    # Utility unit: reuse the HVAC dynamics but drop the room-comfort tags it
+    # does not measure, and re-scale what remains.
+    sensors:
+      - {tag: room_temperature, remove: true}
+      - {tag: room_humidity, remove: true}
+      - tag: airflow
+        override: {baseline: 3100.0, warn_low: 2400.0, alarm_low: 2000.0}
+      - tag: differential_pressure
+        override: {baseline: 24.0, warn_low: 16.0, alarm_low: 11.0}
+      - tag: HEPA_pressure
+        override: {baseline: 260.0, warn_high: 390.0, alarm_high: 460.0}
+      - tag: fan_speed
+        override: {baseline: 1480.0, warn_low: 1180.0, alarm_low: 1000.0}
+    nominal_rate_per_hour: 1000.0
+    pm_interval_hours: 600.0
+    base_reject_rate: 0.0
+
+  # ---- UNIT-02 Granulation -------------------------------------------------
+  - id: high_shear_granulator
+    stage_duration_min: 115.0
+    name: High Shear Granulator
+    sensor_profile: granulator
+    nominal_rate_per_hour: 480.0
+    pm_interval_hours: 640.0
+    base_reject_rate: 0.005
+    cleaning_duration_min: 45.0
+    changeover_duration_min: 60.0
+
+  - id: wet_granulator
+    stage_duration_min: 135.0
+    name: Wet Granulator
+    sensor_profile: granulator
+    # Same family, gentler machine: lower speeds and torque, and it has no
+    # pressure instrument at all.
+    sensors:
+      - {tag: pressure, remove: true}
+      - tag: motor_speed
+        override: {baseline: 210.0, warn_low: 150.0, warn_high: 290.0}
+      - tag: impeller_speed
+        override: {baseline: 300.0, warn_low: 230.0, warn_high: 400.0}
+      - tag: torque
+        override: {baseline: 64.0, warn_high: 96.0, alarm_high: 120.0}
+      - tag: granulation_time
+        override: {baseline: 26.0, warn_high: 38.0}
+      # A tag this class has and the profile does not.
+      - tag: binder_flow_rate
+        unit: kg/h
+        baseline: 42.0
+        sigma: 1.2
+        rho: 0.88
+        health_sensitivity: -0.18
+        hard_min: 0.0
+        hard_max: 120.0
+        warn_low: 30.0
+        alarm_low: 24.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.0, sigma_mult: 0.0}
+          starting: {mult: 0.55, sigma_mult: 3.0}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          maintenance: {mult: 0.0, sigma_mult: 0.0}
+          cleaning: {mult: 0.0, sigma_mult: 0.0}
+          changeover: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 0.90, sigma_mult: 2.0}
+    nominal_rate_per_hour: 420.0
+    pm_interval_hours: 720.0
+    base_reject_rate: 0.006
+    cleaning_duration_min: 50.0
+
+  - id: mixing_system
+    stage_duration_min: 90.0
+    name: Mixing System
+    sensor_profile: granulator
+    sensors:
+      - {tag: torque, remove: true}
+      - {tag: granulation_time, remove: true}
+      - tag: motor_speed
+        override: {baseline: 145.0, warn_low: 100.0, warn_high: 200.0}
+      - tag: impeller_speed
+        override: {baseline: 180.0, warn_low: 130.0, warn_high: 250.0}
+      - tag: motor_current
+        override: {baseline: 13.0, warn_high: 19.0, alarm_high: 24.0}
+    nominal_rate_per_hour: 560.0
+    pm_interval_hours: 840.0
+    base_reject_rate: 0.003
+
+  # ---- UNIT-03 Drying ------------------------------------------------------
+  - id: fluid_bed_dryer
+    stage_duration_min: 150.0
+    name: Fluid Bed Dryer
+    sensor_profile: fluid_bed_dryer
+    nominal_rate_per_hour: 400.0
+    pm_interval_hours: 700.0
+    base_reject_rate: 0.005
+    cleaning_duration_min: 40.0
+
+  - id: air_handling_system
+    duty: continuous
+    stage_duration_min: 120.0
+    name: Air Handling System
+    sensor_profile: hvac
+    nominal_rate_per_hour: 1000.0
+    pm_interval_hours: 560.0
+    base_reject_rate: 0.0
+
+  - id: heater
+    duty: coupled
+    stage_duration_min: 120.0
+    name: Process Heater
+    nominal_rate_per_hour: 1000.0
+    pm_interval_hours: 800.0
+    base_reject_rate: 0.0
+    sensors:
+      - tag: element_temperature
+        unit: degC
+        baseline: 92.0
+        sigma: 1.1
+        rho: 0.96
+        drift_per_day: 0.05
+        drift_limit: 4.0
+        ambient_coupling: 0.2
+        health_sensitivity: 0.24
+        hard_min: 0.0
+        hard_max: 200.0
+        warn_high: 118.0
+        alarm_high: 132.0
+        state_factors:
+          offline: {mult: 0.25, sigma_mult: 0.2}
+          idle: {mult: 0.45, sigma_mult: 0.4}
+          fault: {mult: 0.30, sigma_mult: 0.6}
+          warning: {mult: 1.08, sigma_mult: 1.6}
+      - tag: power_consumption
+        unit: kW
+        baseline: 24.0
+        sigma: 0.6
+        rho: 0.94
+        health_sensitivity: 0.20
+        hard_min: 0.0
+        hard_max: 60.0
+        warn_high: 34.0
+        state_factors:
+          offline: {mult: 0.02, sigma_mult: 0.1}
+          idle: {mult: 0.15, sigma_mult: 0.3}
+          fault: {mult: 0.05, sigma_mult: 0.2}
+          warning: {mult: 1.10, sigma_mult: 1.7}
+      - tag: motor_current
+        unit: A
+        baseline: 34.0
+        sigma: 0.9
+        rho: 0.93
+        drift_per_day: 0.03
+        drift_limit: 2.4
+        health_sensitivity: 0.22
+        hard_min: 0.0
+        hard_max: 90.0
+        warn_high: 46.0
+        alarm_high: 56.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.14, sigma_mult: 0.3}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 1.10, sigma_mult: 1.8}
+
+  - id: blower
+    duty: coupled
+    stage_duration_min: 120.0
+    name: Process Blower
+    nominal_rate_per_hour: 1000.0
+    pm_interval_hours: 640.0
+    base_reject_rate: 0.0
+    sensors:
+      - tag: fan_speed
+        unit: rpm
+        baseline: 2450.0
+        sigma: 22.0
+        rho: 0.95
+        health_sensitivity: -0.16
+        hard_min: 0.0
+        hard_max: 3600.0
+        warn_low: 1950.0
+        alarm_low: 1650.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.25, sigma_mult: 0.4}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 0.91, sigma_mult: 1.7}
+      - tag: airflow
+        unit: m3/h
+        baseline: 3400.0
+        sigma: 42.0
+        rho: 0.93
+        drift_per_day: -1.6
+        drift_limit: 120.0
+        health_sensitivity: -0.30
+        hard_min: 0.0
+        hard_max: 5600.0
+        warn_low: 2700.0
+        alarm_low: 2250.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.22, sigma_mult: 0.4}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 0.88, sigma_mult: 1.8}
+      - tag: vibration
+        unit: mm/s
+        baseline: 2.2
+        sigma: 0.18
+        rho: 0.94
+        drift_per_day: 0.007
+        drift_limit: 0.5
+        health_sensitivity: 0.90
+        hard_min: 0.0
+        hard_max: 30.0
+        warn_high: 4.8
+        alarm_high: 7.4
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.12, sigma_mult: 0.3}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 1.15, sigma_mult: 1.8}
+      - tag: motor_current
+        unit: A
+        baseline: 18.5
+        sigma: 0.55
+        rho: 0.93
+        drift_per_day: 0.02
+        drift_limit: 1.5
+        health_sensitivity: 0.21
+        hard_min: 0.0
+        hard_max: 55.0
+        warn_high: 25.0
+        alarm_high: 31.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.13, sigma_mult: 0.3}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 1.10, sigma_mult: 1.8}
+
+  # ---- UNIT-04 Milling -----------------------------------------------------
+  - id: cone_mill
+    stage_duration_min: 85.0
+    name: Cone Mill
+    sensor_profile: cone_mill
+    nominal_rate_per_hour: 520.0
+    pm_interval_hours: 600.0
+    base_reject_rate: 0.004
+
+  - id: pulverizer
+    stage_duration_min: 95.0
+    name: Pulverizer
+    sensor_profile: cone_mill
+    sensors:
+      - tag: rpm
+        override: {baseline: 2900.0, warn_low: 2200.0, warn_high: 3500.0, hard_max: 5000.0}
+      - tag: motor_current
+        override: {baseline: 21.0, warn_high: 28.0, alarm_high: 35.0}
+      - tag: particle_size
+        override: {baseline: 145.0, warn_low: 100.0, warn_high: 210.0, alarm_high: 260.0}
+      - tag: power_consumption
+        override: {baseline: 11.5, warn_high: 16.5}
+    nominal_rate_per_hour: 380.0
+    pm_interval_hours: 520.0
+    base_reject_rate: 0.007
+
+  # ---- UNIT-05 Blending ----------------------------------------------------
+  - id: bin_blender
+    stage_duration_min: 105.0
+    name: Bin Blender
+    sensor_profile: blender
+    nominal_rate_per_hour: 500.0
+    pm_interval_hours: 800.0
+    base_reject_rate: 0.003
+
+  - id: v_blender
+    stage_duration_min: 95.0
+    name: V-Blender
+    sensor_profile: blender
+    sensors:
+      - tag: rpm
+        override: {baseline: 20.0, warn_low: 13.0, warn_high: 28.0}
+      - tag: blend_time
+        override: {baseline: 18.0, warn_low: 12.0, warn_high: 28.0}
+      - tag: load_weight
+        override: {baseline: 210.0, warn_high: 360.0, hard_max: 480.0}
+    nominal_rate_per_hour: 430.0
+    pm_interval_hours: 860.0
+    base_reject_rate: 0.003
+
+  - id: ibc
+    duty: coupled
+    stage_duration_min: 40.0
+    name: Intermediate Bulk Container
+    nominal_rate_per_hour: 1000.0
+    pm_interval_hours: 1440.0
+    base_reject_rate: 0.0
+    sensors:
+      - tag: load_weight
+        unit: kg
+        baseline: 280.0
+        sigma: 1.8
+        rho: 0.90
+        hard_min: 0.0
+        hard_max: 600.0
+        warn_high: 460.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.35, sigma_mult: 0.5}
+          cleaning: {mult: 0.0, sigma_mult: 0.0}
+      - tag: temperature
+        unit: degC
+        baseline: 24.0
+        sigma: 0.3
+        rho: 0.97
+        ambient_coupling: 0.9
+        diurnal_amplitude: 0.6
+        health_sensitivity: 0.08
+        hard_min: 0.0
+        hard_max: 50.0
+        warn_high: 28.0
+        alarm_high: 31.0
+
+  # ---- UNIT-06 Tablet Compression -----------------------------------------
+  - id: tablet_press
+    name: Tablet Press
+    sensor_profile: tablet_press
+    nominal_rate_per_hour: 210000.0
+    pm_interval_hours: 480.0
+    base_reject_rate: 0.006
+    setup_duration_min: 35.0
+    cleaning_duration_min: 40.0
+    changeover_duration_min: 75.0
+
+  - id: tablet_deduster
+    duty: coupled
+    stage_duration_min: 90.0
+    name: Tablet Deduster
+    nominal_rate_per_hour: 240000.0
+    pm_interval_hours: 900.0
+    base_reject_rate: 0.001
+    sensors:
+      - tag: motor_current
+        unit: A
+        baseline: 4.2
+        sigma: 0.18
+        rho: 0.92
+        drift_per_day: 0.008
+        drift_limit: 0.5
+        health_sensitivity: 0.20
+        hard_min: 0.0
+        hard_max: 18.0
+        warn_high: 6.5
+        alarm_high: 8.5
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.08, sigma_mult: 0.4}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 1.09, sigma_mult: 1.9}
+      - tag: vibration
+        unit: mm/s
+        baseline: 1.4
+        sigma: 0.11
+        rho: 0.94
+        drift_per_day: 0.004
+        drift_limit: 0.3
+        health_sensitivity: 0.82
+        hard_min: 0.0
+        hard_max: 20.0
+        warn_high: 3.2
+        alarm_high: 5.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.09, sigma_mult: 0.3}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 1.13, sigma_mult: 1.8}
+      - tag: airflow
+        unit: m3/h
+        baseline: 420.0
+        sigma: 9.0
+        rho: 0.92
+        health_sensitivity: -0.24
+        hard_min: 0.0
+        hard_max: 800.0
+        warn_low: 320.0
+        alarm_low: 260.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.15, sigma_mult: 0.4}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+
+  - id: metal_detector
+    duty: coupled
+    stage_duration_min: 90.0
+    name: Metal Detector
+    nominal_rate_per_hour: 240000.0
+    pm_interval_hours: 1200.0
+    base_reject_rate: 0.0005
+    sensors:
+      - tag: sensitivity_level
+        unit: '%'
+        baseline: 98.5
+        sigma: 0.25
+        rho: 0.93
+        drift_per_day: -0.02
+        drift_limit: 1.6
+        health_sensitivity: -0.10
+        hard_min: 0.0
+        hard_max: 100.0
+        warn_low: 96.0
+        alarm_low: 94.0
+      - tag: rejection_count
+        unit: tablets
+        baseline: 0.0
+        derived_from: reject_count
+        plc_area: COUNTER
+      - tag: temperature
+        unit: degC
+        baseline: 26.0
+        sigma: 0.3
+        rho: 0.96
+        ambient_coupling: 0.85
+        diurnal_amplitude: 0.5
+        hard_min: 0.0
+        hard_max: 55.0
+        warn_high: 34.0
+
+  # ---- UNIT-07 Tablet Coating ---------------------------------------------
+  - id: coating_pan
+    name: Coating Pan
+    sensor_profile: coating_machine
+    nominal_rate_per_hour: 180000.0
+    pm_interval_hours: 560.0
+    base_reject_rate: 0.005
+    cleaning_duration_min: 55.0
+    changeover_duration_min: 80.0
+
+  - id: spray_system
+    stage_duration_min: 100.0
+    name: Spray System
+    sensor_profile: coating_machine
+    # Only the spray train; the pan and air tags belong to the coating pan.
+    sensors:
+      - {tag: pan_speed, remove: true}
+      - {tag: inlet_temperature, remove: true}
+      - {tag: outlet_temperature, remove: true}
+      - {tag: airflow, remove: true}
+      - {tag: humidity, remove: true}
+      - {tag: coating_weight, remove: true}
+    nominal_rate_per_hour: 180000.0
+    pm_interval_hours: 480.0
+    base_reject_rate: 0.002
+
+  - id: drying_air_system
+    duty: coupled
+    stage_duration_min: 100.0
+    name: Drying Air System
+    sensor_profile: hvac
+    sensors:
+      - {tag: room_humidity, remove: true}
+      - tag: room_temperature
+        override: {baseline: 56.0, warn_low: 46.0, warn_high: 68.0, alarm_high: 76.0, hard_max: 120.0}
+      - tag: airflow
+        override: {baseline: 2200.0, warn_low: 1700.0, alarm_low: 1400.0}
+      - tag: fan_speed
+        override: {baseline: 1620.0, warn_low: 1280.0, alarm_low: 1080.0}
+    nominal_rate_per_hour: 1000.0
+    pm_interval_hours: 620.0
+    base_reject_rate: 0.0
+
+  # ---- UNIT-08 Capsule Filling --------------------------------------------
+  - id: capsule_filling_machine
+    name: Capsule Filling Machine
+    sensor_profile: capsule_filler
+    nominal_rate_per_hour: 90000.0
+    pm_interval_hours: 520.0
+    base_reject_rate: 0.008
+    setup_duration_min: 30.0
+    cleaning_duration_min: 45.0
+    changeover_duration_min: 70.0
+
+  - id: powder_feeder
+    duty: coupled
+    stage_duration_min: 120.0
+    name: Powder Feeder
+    nominal_rate_per_hour: 95000.0
+    pm_interval_hours: 700.0
+    base_reject_rate: 0.002
+    sensors:
+      - tag: feed_rate
+        unit: kg/h
+        baseline: 46.0
+        sigma: 1.4
+        rho: 0.89
+        health_sensitivity: -0.20
+        hard_min: 0.0
+        hard_max: 120.0
+        warn_low: 33.0
+        alarm_low: 26.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.0, sigma_mult: 0.0}
+          starting: {mult: 0.55, sigma_mult: 3.0}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 0.90, sigma_mult: 2.0}
+      - tag: motor_current
+        unit: A
+        baseline: 5.4
+        sigma: 0.22
+        rho: 0.92
+        drift_per_day: 0.009
+        drift_limit: 0.6
+        health_sensitivity: 0.20
+        hard_min: 0.0
+        hard_max: 20.0
+        warn_high: 8.0
+        alarm_high: 10.5
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.08, sigma_mult: 0.4}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 1.09, sigma_mult: 1.9}
+      - tag: vibration
+        unit: mm/s
+        baseline: 1.35
+        sigma: 0.10
+        rho: 0.94
+        drift_per_day: 0.004
+        drift_limit: 0.3
+        health_sensitivity: 0.80
+        hard_min: 0.0
+        hard_max: 18.0
+        warn_high: 3.0
+        alarm_high: 4.8
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.09, sigma_mult: 0.3}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 1.13, sigma_mult: 1.8}
+
+  - id: vacuum_system
+    duty: continuous
+    stage_duration_min: 120.0
+    name: Vacuum System
+    nominal_rate_per_hour: 1000.0
+    pm_interval_hours: 640.0
+    base_reject_rate: 0.0
+    sensors:
+      - tag: vacuum_pressure
+        unit: mbar
+        baseline: -650.0
+        sigma: 11.0
+        rho: 0.92
+        drift_per_day: 2.0
+        drift_limit: 70.0
+        health_sensitivity: 0.26
+        hard_min: -1000.0
+        hard_max: 0.0
+        warn_high: -520.0
+        alarm_high: -440.0
+        state_factors:
+          offline: {mult: 0.02, sigma_mult: 0.1}
+          idle: {mult: 0.30, sigma_mult: 0.3}
+          fault: {mult: 0.05, sigma_mult: 0.3}
+          warning: {mult: 0.86, sigma_mult: 1.9}
+      - tag: motor_current
+        unit: A
+        baseline: 12.0
+        sigma: 0.4
+        rho: 0.93
+        drift_per_day: 0.016
+        drift_limit: 1.0
+        health_sensitivity: 0.22
+        hard_min: 0.0
+        hard_max: 40.0
+        warn_high: 17.0
+        alarm_high: 21.5
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.20, sigma_mult: 0.4}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 1.10, sigma_mult: 1.8}
+      - tag: temperature
+        unit: degC
+        baseline: 44.0
+        sigma: 0.7
+        rho: 0.96
+        ambient_coupling: 0.5
+        diurnal_amplitude: 0.7
+        health_sensitivity: 0.22
+        hard_min: -10.0
+        hard_max: 110.0
+        warn_high: 60.0
+        alarm_high: 70.0
+
+  # ---- UNIT-09 Packaging ---------------------------------------------------
+  - id: blister_packaging_machine
+    stage_duration_min: 165.0
+    name: Blister Packaging Machine
+    sensor_profile: packaging_machine
+    nominal_rate_per_hour: 13200.0
+    pm_interval_hours: 500.0
+    base_reject_rate: 0.007
+    setup_duration_min: 25.0
+    changeover_duration_min: 55.0
+
+  - id: cartoner
+    duty: coupled
+    stage_duration_min: 150.0
+    name: Cartoner
+    sensor_profile: packaging_machine
+    sensors:
+      - {tag: forming_temperature, remove: true}
+      - {tag: sealing_temperature, remove: true}
+      - {tag: sealing_pressure, remove: true}
+      - {tag: foil_tension, remove: true}
+      - tag: line_speed
+        override: {baseline: 160.0, unit: cartons/min, warn_low: 115.0, warn_high: 210.0}
+      - tag: glue_temperature
+        unit: degC
+        baseline: 158.0
+        sigma: 1.6
+        rho: 0.95
+        ambient_coupling: 0.15
+        health_sensitivity: 0.10
+        hard_min: 0.0
+        hard_max: 240.0
+        warn_low: 142.0
+        warn_high: 174.0
+        alarm_low: 132.0
+        alarm_high: 186.0
+        state_factors:
+          offline: {mult: 0.18, sigma_mult: 0.2}
+          idle: {mult: 0.55, sigma_mult: 0.4}
+          fault: {mult: 0.40, sigma_mult: 0.6}
+          warning: {mult: 1.04, sigma_mult: 1.7}
+    nominal_rate_per_hour: 9600.0
+    pm_interval_hours: 620.0
+    base_reject_rate: 0.004
+
+  - id: labeling_machine
+    duty: coupled
+    stage_duration_min: 140.0
+    name: Labeling Machine
+    sensor_profile: packaging_machine
+    sensors:
+      - {tag: forming_temperature, remove: true}
+      - {tag: sealing_temperature, remove: true}
+      - {tag: sealing_pressure, remove: true}
+      - tag: line_speed
+        override: {baseline: 190.0, unit: labels/min, warn_low: 140.0, warn_high: 250.0}
+      - tag: foil_tension
+        override: {baseline: 22.0, unit: N, warn_low: 15.0, warn_high: 32.0, alarm_low: 11.0}
+    nominal_rate_per_hour: 11400.0
+    pm_interval_hours: 720.0
+    base_reject_rate: 0.003
+
+  - id: vision_inspection
+    duty: coupled
+    stage_duration_min: 130.0
+    name: Vision Inspection System
+    nominal_rate_per_hour: 14400.0
+    pm_interval_hours: 1080.0
+    base_reject_rate: 0.001
+    sensors:
+      - tag: camera_rejection
+        unit: packs
+        baseline: 0.0
+        derived_from: reject_count
+        plc_area: COUNTER
+      - tag: illumination_level
+        unit: lux
+        baseline: 850.0
+        sigma: 9.0
+        rho: 0.95
+        drift_per_day: -0.9
+        drift_limit: 65.0
+        health_sensitivity: -0.22
+        hard_min: 0.0
+        hard_max: 1500.0
+        warn_low: 700.0
+        alarm_low: 620.0
+      - tag: temperature
+        unit: degC
+        baseline: 29.0
+        sigma: 0.4
+        rho: 0.96
+        ambient_coupling: 0.8
+        diurnal_amplitude: 0.6
+        health_sensitivity: 0.14
+        hard_min: 0.0
+        hard_max: 70.0
+        warn_high: 40.0
+        alarm_high: 47.0
+
+  # ---- UNIT-10 Sterilization and Utilities --------------------------------
+  - id: autoclave
+    stage_duration_min: 70.0
+    name: Autoclave
+    sensor_profile: autoclave
+    nominal_rate_per_hour: 260.0
+    pm_interval_hours: 560.0
+    base_reject_rate: 0.002
+    cleaning_duration_min: 35.0
+
+  - id: hvac
+    duty: continuous
+    stage_duration_min: 120.0
+    name: HVAC Unit
+    sensor_profile: hvac
+    nominal_rate_per_hour: 1000.0
+    pm_interval_hours: 520.0
+    base_reject_rate: 0.0
+
+  - id: purified_water_system
+    duty: continuous
+    stage_duration_min: 120.0
+    name: Purified Water System
+    nominal_rate_per_hour: 1000.0
+    pm_interval_hours: 480.0
+    base_reject_rate: 0.0
+    sensors:
+      - tag: conductivity
+        unit: uS/cm
+        baseline: 1.05
+        sigma: 0.05
+        rho: 0.95
+        drift_per_day: 0.006
+        drift_limit: 0.5
+        health_sensitivity: 0.42
+        hard_min: 0.0
+        hard_max: 10.0
+        warn_high: 1.30
+        alarm_high: 1.60
+      - tag: temperature
+        unit: degC
+        baseline: 24.5
+        sigma: 0.3
+        rho: 0.97
+        ambient_coupling: 0.75
+        diurnal_amplitude: 0.5
+        hard_min: 0.0
+        hard_max: 90.0
+        warn_high: 30.0
+        alarm_high: 34.0
+      - tag: flow_rate
+        unit: L/min
+        baseline: 240.0
+        sigma: 5.0
+        rho: 0.93
+        drift_per_day: -0.35
+        drift_limit: 24.0
+        health_sensitivity: -0.28
+        hard_min: 0.0
+        hard_max: 500.0
+        warn_low: 180.0
+        alarm_low: 150.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          fault: {mult: 0.10, sigma_mult: 0.8}
+      - tag: pump_speed
+        unit: rpm
+        baseline: 1750.0
+        sigma: 16.0
+        rho: 0.94
+        health_sensitivity: -0.18
+        hard_min: 0.0
+        hard_max: 2800.0
+        warn_low: 1400.0
+        alarm_low: 1180.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+
+  - id: compressed_air_system
+    duty: continuous
+    stage_duration_min: 120.0
+    name: Compressed Air System
+    nominal_rate_per_hour: 1000.0
+    pm_interval_hours: 500.0
+    base_reject_rate: 0.0
+    sensors:
+      - tag: pressure
+        unit: bar
+        baseline: 7.0
+        sigma: 0.09
+        rho: 0.95
+        drift_per_day: -0.004
+        drift_limit: 0.4
+        health_sensitivity: -0.16
+        hard_min: 0.0
+        hard_max: 14.0
+        warn_low: 6.0
+        alarm_low: 5.4
+        state_factors:
+          offline: {mult: 0.30, sigma_mult: 0.3}
+          fault: {mult: 0.45, sigma_mult: 1.0}
+      - tag: dew_point
+        unit: degC
+        baseline: -42.0
+        sigma: 1.2
+        rho: 0.94
+        drift_per_day: 0.09
+        drift_limit: 8.0
+        health_sensitivity: 0.30
+        hard_min: -80.0
+        hard_max: 25.0
+        warn_high: -28.0
+        alarm_high: -18.0
+      - tag: motor_current
+        unit: A
+        baseline: 28.0
+        sigma: 0.8
+        rho: 0.93
+        drift_per_day: 0.024
+        drift_limit: 2.0
+        health_sensitivity: 0.22
+        hard_min: 0.0
+        hard_max: 80.0
+        warn_high: 38.0
+        alarm_high: 47.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          fault: {mult: 0.0, sigma_mult: 0.0}
+      - tag: temperature
+        unit: degC
+        baseline: 52.0
+        sigma: 0.9
+        rho: 0.96
+        ambient_coupling: 0.45
+        diurnal_amplitude: 0.8
+        health_sensitivity: 0.24
+        hard_min: -10.0
+        hard_max: 130.0
+        warn_high: 70.0
+        alarm_high: 82.0
+
+# Plant layout: 10 units, 100 machines. Machine ids are "<id_prefix>-<nnn>".
+layout:
+  UNIT-01:
+    - {equipment_class: dispensing_booth,  count: 3, id_prefix: DB,  commissioned_from: 2020-03-01, commissioned_to: 2024-11-30}
+    - {equipment_class: weighing_scale,    count: 4, id_prefix: WS,  commissioned_from: 2019-06-01, commissioned_to: 2025-04-30}
+    - {equipment_class: material_transfer, count: 2, id_prefix: MT1, commissioned_from: 2019-01-01, commissioned_to: 2023-08-31}
+    - {equipment_class: dust_extraction,   count: 1, id_prefix: DE,  commissioned_from: 2020-01-01, commissioned_to: 2021-12-31}
+
+  UNIT-02:
+    - {equipment_class: high_shear_granulator, count: 3, id_prefix: HSG, commissioned_from: 2019-04-01, commissioned_to: 2024-09-30}
+    - {equipment_class: wet_granulator,        count: 2, id_prefix: WG,  commissioned_from: 2020-02-01, commissioned_to: 2025-01-31}
+    - {equipment_class: mixing_system,         count: 2, id_prefix: MX,  commissioned_from: 2019-09-01, commissioned_to: 2024-06-30}
+
+  UNIT-03:
+    - {equipment_class: fluid_bed_dryer,     count: 8, id_prefix: FBD, commissioned_from: 2019-02-01, commissioned_to: 2024-12-31}
+    - {equipment_class: air_handling_system, count: 2, id_prefix: AHU, commissioned_from: 2019-01-01, commissioned_to: 2022-05-31}
+    - {equipment_class: heater,              count: 2, id_prefix: HTR, commissioned_from: 2020-07-01, commissioned_to: 2024-03-31}
+    - {equipment_class: blower,              count: 2, id_prefix: BLW, commissioned_from: 2020-05-01, commissioned_to: 2023-11-30}
+
+  UNIT-04:
+    - {equipment_class: cone_mill,         count: 3, id_prefix: CM,  commissioned_from: 2019-08-01, commissioned_to: 2025-02-28}
+    - {equipment_class: pulverizer,        count: 2, id_prefix: PLV, commissioned_from: 2019-03-01, commissioned_to: 2024-07-31}
+    - {equipment_class: material_transfer, count: 2, id_prefix: MT4, commissioned_from: 2019-01-01, commissioned_to: 2023-10-31}
+
+  UNIT-05:
+    - {equipment_class: bin_blender, count: 4, id_prefix: BB,  commissioned_from: 2019-05-01, commissioned_to: 2025-03-31}
+    - {equipment_class: v_blender,   count: 3, id_prefix: VB,  commissioned_from: 2019-10-01, commissioned_to: 2024-08-31}
+    - {equipment_class: ibc,         count: 3, id_prefix: IBC, commissioned_from: 2021-01-01, commissioned_to: 2025-06-30}
+
+  UNIT-06:
+    - {equipment_class: tablet_press,    count: 6, id_prefix: TP, commissioned_from: 2019-01-15, commissioned_to: 2025-05-31}
+    - {equipment_class: tablet_deduster, count: 2, id_prefix: TD, commissioned_from: 2020-04-01, commissioned_to: 2024-10-31}
+    - {equipment_class: metal_detector,  count: 2, id_prefix: MD, commissioned_from: 2021-02-01, commissioned_to: 2025-01-31}
+
+  UNIT-07:
+    - {equipment_class: coating_pan,       count: 3, id_prefix: CP,  commissioned_from: 2019-07-01, commissioned_to: 2024-12-31}
+    - {equipment_class: spray_system,      count: 1, id_prefix: SS,  commissioned_from: 2020-06-01, commissioned_to: 2025-02-28}
+    - {equipment_class: drying_air_system, count: 3, id_prefix: DAS, commissioned_from: 2019-11-01, commissioned_to: 2023-09-30}
+
+  UNIT-08:
+    - {equipment_class: capsule_filling_machine, count: 2, id_prefix: CFM, commissioned_from: 2019-09-15, commissioned_to: 2025-04-30}
+    - {equipment_class: powder_feeder,           count: 2, id_prefix: PF,  commissioned_from: 2020-08-01, commissioned_to: 2024-11-30}
+    - {equipment_class: vacuum_system,           count: 2, id_prefix: VS,  commissioned_from: 2019-12-01, commissioned_to: 2023-12-31}
+
+  UNIT-09:
+    - {equipment_class: blister_packaging_machine, count: 10, id_prefix: BPM, commissioned_from: 2019-04-15, commissioned_to: 2025-03-31}
+    - {equipment_class: cartoner,                  count: 5, id_prefix: CTN, commissioned_from: 2020-09-01, commissioned_to: 2024-09-30}
+    - {equipment_class: labeling_machine,          count: 3, id_prefix: LBL, commissioned_from: 2021-03-01, commissioned_to: 2025-06-30}
+    - {equipment_class: vision_inspection,         count: 2, id_prefix: VIS, commissioned_from: 2021-06-01, commissioned_to: 2025-05-31}
+
+  UNIT-10:
+    - {equipment_class: autoclave,             count: 2, id_prefix: AC,  commissioned_from: 2019-02-15, commissioned_to: 2024-08-31}
+    - {equipment_class: hvac,                  count: 3, id_prefix: AHV, commissioned_from: 2019-01-01, commissioned_to: 2022-12-31}
+    - {equipment_class: purified_water_system, count: 2, id_prefix: PWS, commissioned_from: 2019-03-15, commissioned_to: 2023-06-30}
+    - {equipment_class: compressed_air_system, count: 2, id_prefix: CAS, commissioned_from: 2019-05-15, commissioned_to: 2023-07-31}

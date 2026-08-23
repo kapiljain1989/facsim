@@ -1,0 +1,41 @@
+# Deviation policy: which events open a deviation, and whether it requires RCA
+# and CAPA. Every rule's trigger_event must be a declared event type, which the
+# linter enforces.
+
+statuses: [OPEN, INVESTIGATION, CAPA_PENDING, CLOSED]
+
+rules:
+  - id: DEV-RULE-MACHINE-FAILURE
+    trigger_event: MACHINE_FAILURE
+    severity: MAJOR
+    title: Unplanned equipment failure during production
+    requires_rca: true
+    requires_capa: true
+
+  - id: DEV-RULE-QC-FAILURE
+    trigger_event: QC_FAILED
+    severity: MAJOR
+    title: Quality control result outside specification
+    requires_rca: true
+    requires_capa: true
+
+  - id: DEV-RULE-SENSOR-ALARM
+    trigger_event: SENSOR_ALARM
+    severity: MINOR
+    title: Process parameter alarm limit exceeded
+    requires_rca: false
+    requires_capa: false
+
+  - id: DEV-RULE-AMBIENT
+    trigger_event: AMBIENT_EXCURSION_STARTED
+    severity: MINOR
+    title: Environmental excursion in a production area
+    requires_rca: false
+    requires_capa: false
+
+  - id: DEV-RULE-MATERIAL
+    trigger_event: MATERIAL_SHORTAGE
+    severity: MINOR
+    title: Material not available at the point of use
+    requires_rca: false
+    requires_capa: false

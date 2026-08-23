@@ -1,0 +1,35 @@
+plant_id: PLANT-01
+name: Aurora Pharmaceuticals — Solid Dosage Facility
+location: Pune, India
+timezone: Asia/Kolkata
+plant_manager_name: R. Deshmukh
+
+simulation:
+  seed: 42
+  start_time: 2026-01-01T06:00:00
+  # Pacing for --live / --speed runs. Fast-forward ignores this entirely.
+  speed_sim_minutes_per_real_second: 60.0
+
+  # Telemetry cadence for historical backfill. 60s over 30 days across ~100
+  # machines is ~28M readings; see README for the volume table before lowering.
+  sensor_sample_interval_s: 60.0
+  # Cadence used by --live, where a realistic gateway feed matters more than
+  # total row count.
+  live_sensor_sample_interval_s: 5.0
+
+  hazard_evaluation_interval_min: 60.0
+  production_tick_min: 5.0
+  label_interval_min: 30.0
+  rca_lookback_hours: 72.0
+  rca_investigation_delay_hours: 4.0
+
+# Plant-wide environment. These are latent drivers shared by every sensor, which
+# is what makes readings across different machines correlate the way real ones do.
+ambient:
+  temperature_c: 22.0
+  temperature_diurnal_amplitude_c: 2.5
+  humidity_pct: 45.0
+  humidity_diurnal_amplitude_pct: 5.0
+  excursion_probability_per_day: 0.02
+  excursion_temperature_delta_c: 6.0
+  excursion_duration_hours: 3.0

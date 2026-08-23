@@ -1,0 +1,214 @@
+# Product catalogue. Nothing product-specific exists in Python: a new product is
+# a block here, including its route, its setpoints and which QC tests apply.
+#
+# `manufacturing_process` lists process stages, which must be stages some unit
+# performs (see units.yaml). `process_parameters` gives the setpoint and window
+# per stage — these are the values QC transfer functions read, so changing a
+# setpoint here genuinely changes downstream quality.
+
+# Work in process. One batch occupies one machine at a time, so this is also the
+# ceiling on how many batch-duty machines can be productive at once — it has to
+# be sized against the bottleneck stage's capacity, not picked for looks.
+max_concurrent_batches: 45
+
+products:
+  - product_id: PARA-500
+    product_name: Paracetamol 500 mg Tablet
+    dosage_form: TABLET
+    batch_size: 300000
+    target_quantity: 300000
+    demand_weight: 3.0
+    manufacturing_process:
+      [DISPENSING, GRANULATION, DRYING, MILLING, BLENDING, COMPRESSION, COATING, PACKAGING]
+    raw_materials:
+      - {material_id: RM-PARA, name: Paracetamol API, quantity_kg: 150.0, variability: 0.018}
+      - {material_id: RM-STARCH, name: Maize Starch, quantity_kg: 28.0, variability: 0.030}
+      - {material_id: RM-PVP, name: Povidone K30, quantity_kg: 9.0, variability: 0.022}
+      - {material_id: RM-MGST, name: Magnesium Stearate, quantity_kg: 2.4, variability: 0.025}
+      - {material_id: RM-COAT, name: Film Coating Premix, quantity_kg: 6.5, variability: 0.020}
+    process_parameters:
+      DISPENSING:
+        dispensed_weight: {target: 25.0, min: 24.6, max: 25.4, unit: kg}
+      GRANULATION:
+        impeller_speed: {target: 480.0, min: 420.0, max: 540.0, unit: rpm}
+        granulation_time: {target: 18.0, min: 15.0, max: 22.0, unit: min}
+      DRYING:
+        inlet_temperature: {target: 62.0, min: 56.0, max: 68.0, unit: degC}
+        drying_time: {target: 45.0, min: 38.0, max: 55.0, unit: min}
+      MILLING:
+        particle_size: {target: 240.0, min: 200.0, max: 290.0, unit: um}
+      BLENDING:
+        blend_time: {target: 22.0, min: 18.0, max: 27.0, unit: min}
+        rpm: {target: 14.0, min: 11.0, max: 17.0, unit: rpm}
+      COMPRESSION:
+        main_compression_force: {target: 14.0, min: 11.5, max: 17.0, unit: kN}
+        turret_speed: {target: 62.0, min: 50.0, max: 74.0, unit: rpm}
+        tablet_weight: {target: 550.0, min: 533.5, max: 566.5, unit: mg}
+      COATING:
+        spray_rate: {target: 120.0, min: 100.0, max: 145.0, unit: g/min}
+        inlet_temperature: {target: 58.0, min: 52.0, max: 66.0, unit: degC}
+      PACKAGING:
+        sealing_temperature: {target: 165.0, min: 155.0, max: 176.0, unit: degC}
+    qc_specifications:
+      [moisture_content, granule_size, blend_uniformity_rsd, tablet_weight_qc, tablet_hardness,
+       tablet_thickness_qc, friability, disintegration_time, coating_weight_gain, appearance,
+       dissolution, content_uniformity, assay, impurities, water_content]
+
+  - product_id: IBU-400
+    product_name: Ibuprofen 400 mg Tablet
+    dosage_form: TABLET
+    batch_size: 250000
+    target_quantity: 250000
+    demand_weight: 2.5
+    manufacturing_process:
+      [DISPENSING, GRANULATION, DRYING, MILLING, BLENDING, COMPRESSION, COATING, PACKAGING]
+    raw_materials:
+      - {material_id: RM-IBU, name: Ibuprofen API, quantity_kg: 100.0, variability: 0.022}
+      - {material_id: RM-MCC, name: Microcrystalline Cellulose, quantity_kg: 34.0, variability: 0.028}
+      - {material_id: RM-CROS, name: Croscarmellose Sodium, quantity_kg: 6.0, variability: 0.024}
+      - {material_id: RM-MGST, name: Magnesium Stearate, quantity_kg: 2.0, variability: 0.025}
+      - {material_id: RM-COAT, name: Film Coating Premix, quantity_kg: 5.5, variability: 0.020}
+    process_parameters:
+      DISPENSING:
+        dispensed_weight: {target: 24.8, min: 24.4, max: 25.2, unit: kg}
+      GRANULATION:
+        impeller_speed: {target: 505.0, min: 445.0, max: 565.0, unit: rpm}
+        granulation_time: {target: 20.0, min: 16.0, max: 24.0, unit: min}
+      DRYING:
+        inlet_temperature: {target: 58.0, min: 52.0, max: 64.0, unit: degC}
+        drying_time: {target: 50.0, min: 42.0, max: 60.0, unit: min}
+      MILLING:
+        particle_size: {target: 225.0, min: 185.0, max: 275.0, unit: um}
+      BLENDING:
+        blend_time: {target: 25.0, min: 20.0, max: 30.0, unit: min}
+        rpm: {target: 13.0, min: 10.0, max: 16.0, unit: rpm}
+      COMPRESSION:
+        main_compression_force: {target: 15.5, min: 13.0, max: 18.5, unit: kN}
+        turret_speed: {target: 58.0, min: 47.0, max: 70.0, unit: rpm}
+        tablet_weight: {target: 620.0, min: 601.0, max: 639.0, unit: mg}
+      COATING:
+        spray_rate: {target: 112.0, min: 94.0, max: 136.0, unit: g/min}
+        inlet_temperature: {target: 55.0, min: 49.0, max: 62.0, unit: degC}
+      PACKAGING:
+        sealing_temperature: {target: 168.0, min: 158.0, max: 179.0, unit: degC}
+    qc_specifications:
+      [moisture_content, granule_size, blend_uniformity_rsd, tablet_weight_qc, tablet_hardness,
+       tablet_thickness_qc, friability, disintegration_time, coating_weight_gain, appearance,
+       dissolution, content_uniformity, assay, impurities, water_content]
+    # A 620 mg tablet cannot share a 550 mg tablet's weight specification.
+    qc_overrides:
+      tablet_weight_qc: {target: 620.0, lower_limit: 601.0, upper_limit: 639.0}
+
+  - product_id: AMOX-250
+    product_name: Amoxicillin 250 mg Capsule
+    dosage_form: CAPSULE
+    batch_size: 180000
+    target_quantity: 180000
+    demand_weight: 2.0
+    manufacturing_process:
+      [DISPENSING, GRANULATION, DRYING, MILLING, BLENDING, CAPSULE_FILLING, PACKAGING]
+    raw_materials:
+      - {material_id: RM-AMOX, name: Amoxicillin Trihydrate, quantity_kg: 58.0, variability: 0.026}
+      - {material_id: RM-MCC, name: Microcrystalline Cellulose, quantity_kg: 12.0, variability: 0.028}
+      - {material_id: RM-MGST, name: Magnesium Stearate, quantity_kg: 1.2, variability: 0.025}
+      - {material_id: RM-CAPS, name: Hard Gelatin Capsule Shells, quantity_kg: 3.4, variability: 0.015}
+    process_parameters:
+      DISPENSING:
+        dispensed_weight: {target: 25.2, min: 24.8, max: 25.6, unit: kg}
+      GRANULATION:
+        impeller_speed: {target: 450.0, min: 395.0, max: 505.0, unit: rpm}
+        granulation_time: {target: 16.0, min: 13.0, max: 20.0, unit: min}
+      DRYING:
+        inlet_temperature: {target: 55.0, min: 49.0, max: 61.0, unit: degC}
+        drying_time: {target: 55.0, min: 46.0, max: 66.0, unit: min}
+      MILLING:
+        particle_size: {target: 260.0, min: 215.0, max: 310.0, unit: um}
+      BLENDING:
+        blend_time: {target: 20.0, min: 16.0, max: 25.0, unit: min}
+        rpm: {target: 15.0, min: 12.0, max: 18.0, unit: rpm}
+      CAPSULE_FILLING:
+        fill_weight: {target: 305.0, min: 290.0, max: 320.0, unit: mg}
+      PACKAGING:
+        sealing_temperature: {target: 162.0, min: 152.0, max: 173.0, unit: degC}
+    qc_specifications:
+      [moisture_content, granule_size, blend_uniformity_rsd, capsule_fill_weight_qc,
+       capsule_dissolution, content_uniformity, assay, impurities, water_content]
+
+  - product_id: VITC-500
+    product_name: Vitamin C 500 mg Tablet
+    dosage_form: TABLET
+    batch_size: 400000
+    target_quantity: 400000
+    demand_weight: 1.5
+    # Direct compression: no granulation, drying, milling or coating at all.
+    # The QC transfer functions still work because absent inputs fall back to
+    # their nominal reference rather than silently dropping out.
+    manufacturing_process: [DISPENSING, BLENDING, COMPRESSION, PACKAGING]
+    raw_materials:
+      - {material_id: RM-ASCB, name: Ascorbic Acid (DC grade), quantity_kg: 210.0, variability: 0.020}
+      - {material_id: RM-MCC, name: Microcrystalline Cellulose, quantity_kg: 44.0, variability: 0.028}
+      - {material_id: RM-MGST, name: Magnesium Stearate, quantity_kg: 3.0, variability: 0.025}
+    process_parameters:
+      DISPENSING:
+        dispensed_weight: {target: 25.0, min: 24.5, max: 25.5, unit: kg}
+      BLENDING:
+        blend_time: {target: 28.0, min: 23.0, max: 34.0, unit: min}
+        rpm: {target: 16.0, min: 13.0, max: 19.0, unit: rpm}
+      COMPRESSION:
+        main_compression_force: {target: 16.5, min: 14.0, max: 19.5, unit: kN}
+        turret_speed: {target: 66.0, min: 54.0, max: 78.0, unit: rpm}
+        tablet_weight: {target: 640.0, min: 620.0, max: 660.0, unit: mg}
+      PACKAGING:
+        sealing_temperature: {target: 160.0, min: 150.0, max: 171.0, unit: degC}
+    qc_specifications:
+      [blend_uniformity_rsd, tablet_weight_qc, tablet_hardness, tablet_thickness_qc,
+       friability, disintegration_time, dissolution, content_uniformity, assay]
+    qc_overrides:
+      tablet_weight_qc: {target: 640.0, lower_limit: 620.0, upper_limit: 660.0}
+
+  - product_id: GEN-AB01
+    product_name: Generic Antibiotic Tablet
+    dosage_form: TABLET
+    batch_size: 220000
+    target_quantity: 220000
+    demand_weight: 1.0
+    manufacturing_process:
+      [DISPENSING, GRANULATION, DRYING, MILLING, BLENDING, COMPRESSION, COATING, PACKAGING,
+       STERILIZATION]
+    raw_materials:
+      - {material_id: RM-CEFX, name: Cefixime Trihydrate, quantity_kg: 46.0, variability: 0.030}
+      - {material_id: RM-LACT, name: Lactose Monohydrate, quantity_kg: 62.0, variability: 0.026}
+      - {material_id: RM-CROS, name: Croscarmellose Sodium, quantity_kg: 5.0, variability: 0.024}
+      - {material_id: RM-MGST, name: Magnesium Stearate, quantity_kg: 1.8, variability: 0.025}
+      - {material_id: RM-COAT, name: Film Coating Premix, quantity_kg: 4.8, variability: 0.020}
+    process_parameters:
+      DISPENSING:
+        dispensed_weight: {target: 24.6, min: 24.2, max: 25.0, unit: kg}
+      GRANULATION:
+        impeller_speed: {target: 470.0, min: 415.0, max: 525.0, unit: rpm}
+        granulation_time: {target: 19.0, min: 15.0, max: 23.0, unit: min}
+      DRYING:
+        inlet_temperature: {target: 60.0, min: 54.0, max: 66.0, unit: degC}
+        drying_time: {target: 48.0, min: 40.0, max: 58.0, unit: min}
+      MILLING:
+        particle_size: {target: 235.0, min: 195.0, max: 285.0, unit: um}
+      BLENDING:
+        blend_time: {target: 24.0, min: 19.0, max: 29.0, unit: min}
+        rpm: {target: 14.0, min: 11.0, max: 17.0, unit: rpm}
+      COMPRESSION:
+        main_compression_force: {target: 13.5, min: 11.0, max: 16.5, unit: kN}
+        turret_speed: {target: 60.0, min: 49.0, max: 72.0, unit: rpm}
+        tablet_weight: {target: 580.0, min: 562.0, max: 598.0, unit: mg}
+      COATING:
+        spray_rate: {target: 118.0, min: 99.0, max: 143.0, unit: g/min}
+        inlet_temperature: {target: 57.0, min: 51.0, max: 64.0, unit: degC}
+      PACKAGING:
+        sealing_temperature: {target: 166.0, min: 156.0, max: 177.0, unit: degC}
+      STERILIZATION:
+        cycle_time: {target: 42.0, min: 36.0, max: 50.0, unit: min}
+    qc_specifications:
+      [moisture_content, granule_size, blend_uniformity_rsd, tablet_weight_qc, tablet_hardness,
+       tablet_thickness_qc, friability, disintegration_time, coating_weight_gain, appearance,
+       dissolution, content_uniformity, assay, impurities, water_content, microbial_limit]
+    qc_overrides:
+      tablet_weight_qc: {target: 580.0, lower_limit: 562.0, upper_limit: 598.0}

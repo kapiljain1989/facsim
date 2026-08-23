@@ -1,0 +1,99 @@
+# Predefined scenarios (§39). A scenario is a duration plus a list of timed
+# interventions; `overrides` temporarily patches configuration using dotted paths.
+#
+# Injected failures are not merely recorded — they enter the same degradation
+# machinery as naturally-arising ones, so precursors, warnings, production loss,
+# QC impact, deviation, RCA and CAPA all follow (§38).
+
+scenarios:
+  - id: NORMAL_PRODUCTION
+    description: Baseline operation with no intervention.
+    duration_hours: 24.0
+    actions: []
+
+  - id: MACHINE_FAILURE
+    description: A single tablet press develops a bearing fault mid-shift.
+    duration_hours: 48.0
+    actions:
+      - {type: inject_failure, at_hours: 3.0, equipment_class: tablet_press, failure_mode: BEARING_FAILURE, severity: MAJOR}
+
+  - id: MULTIPLE_MACHINE_FAILURE
+    description: Three machines fail across different units within one day.
+    duration_hours: 48.0
+    actions:
+      - {type: inject_failure, at_hours: 2.0, equipment_class: tablet_press, failure_mode: BEARING_FAILURE, severity: MAJOR}
+      - {type: inject_failure, at_hours: 6.0, equipment_class: high_shear_granulator, failure_mode: GEAR_FAILURE, severity: MAJOR}
+      - {type: inject_failure, at_hours: 11.0, equipment_class: blister_packaging_machine, failure_mode: BELT_FAILURE, severity: MINOR}
+
+  - id: QC_FAILURE
+    description: Heater control drift pushes moisture low and quality out of specification.
+    duration_hours: 36.0
+    actions:
+      - {type: inject_failure, at_hours: 2.0, equipment_class: fluid_bed_dryer, failure_mode: DRYING_OVERTEMPERATURE, severity: MAJOR}
+
+  - id: OPERATOR_ERROR
+    description: An inexperienced crew makes setup and parameter errors.
+    duration_hours: 24.0
+    overrides:
+      shifts.absenteeism_rate: 0.12
+    actions:
+      - {type: operator_error, at_hours: 1.5, unit_id: UNIT-06}
+      - {type: inject_failure, at_hours: 4.0, equipment_class: tablet_press, failure_mode: WRONG_SETUP, severity: MAJOR}
+
+  - id: RAW_MATERIAL_SHORTAGE
+    description: Dispensing runs out of an API, stalling downstream stages.
+    duration_hours: 24.0
+    actions:
+      - {type: material_shortage, at_hours: 4.0, unit_id: UNIT-01, params: {material_id: RM-PARA, duration_hours: 6.0}}
+
+  - id: HVAC_FAILURE
+    description: HEPA loading collapses the pressure cascade in a cleanroom.
+    duration_hours: 48.0
+    actions:
+      - {type: inject_failure, at_hours: 2.0, equipment_class: hvac, failure_mode: HVAC_FAILURE, severity: MAJOR}
+
+  - id: POWER_FAILURE
+    description: Plant-wide supply interruption.
+    duration_hours: 12.0
+    actions:
+      - {type: power_interruption, at_hours: 3.0, params: {duration_hours: 1.5}}
+
+  - id: SENSOR_FAILURE
+    description: A vibration sensor detaches, hiding a developing mechanical fault.
+    duration_hours: 72.0
+    actions:
+      - {type: inject_failure, at_hours: 2.0, equipment_class: tablet_press, failure_mode: VIBRATION_SENSOR_FAILURE, severity: MINOR}
+      - {type: inject_failure, at_hours: 10.0, equipment_class: tablet_press, failure_mode: BEARING_FAILURE, severity: MAJOR}
+
+  - id: HIGH_DEMAND
+    description: Demand surge pushing machines to sustained high load.
+    duration_hours: 72.0
+    overrides:
+      products.max_concurrent_batches: 10
+    actions:
+      - {type: set_demand, at_hours: 0.0, params: {multiplier: 1.8}}
+
+  - id: LOW_DEMAND
+    description: Reduced demand with long idle periods.
+    duration_hours: 72.0
+    overrides:
+      products.max_concurrent_batches: 2
+    actions:
+      - {type: set_demand, at_hours: 0.0, params: {multiplier: 0.4}}
+
+  - id: MAINTENANCE_OVERDUE
+    description: Preventive maintenance is systematically deferred across the plant.
+    duration_hours: 168.0
+    overrides:
+      maintenance.pm_deferral_probability: 0.85
+      maintenance.pm_deferral_hours: 240.0
+      maintenance.predictive_response_probability: 0.05
+    actions:
+      - {type: defer_maintenance, at_hours: 0.0, params: {hours: 240.0}}
+
+  - id: ENVIRONMENTAL_EXCURSION
+    description: A sustained plant-wide temperature and humidity excursion.
+    duration_hours: 36.0
+    actions:
+      - {type: ambient_excursion, at_hours: 2.0, params: {kind: TEMPERATURE, delta: 7.5, duration_hours: 8.0}}
+      - {type: ambient_excursion, at_hours: 12.0, params: {kind: HUMIDITY, delta: 18.0, duration_hours: 6.0}}

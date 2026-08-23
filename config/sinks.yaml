@@ -1,0 +1,53 @@
+# Streaming sinks for the continuous feed.
+#
+# Sinks are disabled by default so a plain `run` does not try to reach a broker.
+# Enable them here, or select them per-run with `--sink jsonl,mqtt`.
+#
+# Each sink runs on its own thread behind a BOUNDED queue, so a slow or dead sink
+# can never stall the simulation clock. On overflow the oldest batch is dropped
+# and a drop counter is incremented, logged and reported by `status` — silent
+# truncation would make the stream look complete when it is not.
+
+sinks:
+  - name: jsonl
+    type: jsonl
+    enabled: false
+    queue_size: 200000
+    batch_size: 200
+    flush_interval_s: 0.5
+    jsonl:
+      path: "-"            # "-" is stdout; any other value is a file path
+      rotate_mb: 0.0       # >0 rotates the file at that size
+      include_telemetry: true
+      include_events: true
+
+  - name: jsonl_file
+    type: jsonl
+    enabled: false
+    queue_size: 200000
+    batch_size: 1000
+    flush_interval_s: 1.0
+    jsonl:
+      path: ./data/stream/feed.jsonl
+      rotate_mb: 128.0
+      include_telemetry: true
+      include_events: true
+
+  - name: mqtt
+    type: mqtt
+    enabled: false
+    queue_size: 100000
+    batch_size: 500
+    flush_interval_s: 0.5
+    mqtt:
+      host: localhost
+      port: 1883
+      client_id: pharma-sim
+      qos: 0
+      retain: false
+      keepalive: 60
+      # Placeholders available: plant_id, unit_id, machine_id, sensor_id, event_type
+      telemetry_topic: "pharma/{plant_id}/{unit_id}/{machine_id}/telemetry"
+      event_topic: "pharma/{plant_id}/{unit_id}/{machine_id}/events"
+      offline_buffer: 50000
+      connect_timeout_s: 5.0

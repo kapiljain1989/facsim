@@ -1,0 +1,40 @@
+max_concurrent_batches: 4
+
+products:
+  - product_id: SYRUP-100
+    product_name: Paracetamol Oral Syrup 100 ml
+    dosage_form: SYRUP
+    batch_size: 12000
+    target_quantity: 12000
+    demand_weight: 2.0
+    manufacturing_process: [MIXING, FILLING]
+    raw_materials:
+      - {material_id: RM-PARA-L, name: Paracetamol (solution grade), quantity_kg: 24.0, variability: 0.02}
+      - {material_id: RM-SORB, name: Sorbitol, quantity_kg: 180.0, variability: 0.03}
+    process_parameters:
+      MIXING:
+        rpm: {target: 120.0, min: 100.0, max: 145.0, unit: rpm}
+        batch_time: {target: 30.0, min: 25.0, max: 38.0, unit: min}
+      FILLING:
+        fill_volume_ml: {target: 100.0, min: 98.0, max: 102.0, unit: ml}
+    qc_specifications: [mix_uniformity, fill_volume, final_assay]
+
+  - product_id: SYRUP-60
+    product_name: Cough Syrup 60 ml
+    dosage_form: SYRUP
+    batch_size: 18000
+    target_quantity: 18000
+    demand_weight: 1.0
+    manufacturing_process: [MIXING, FILLING]
+    raw_materials:
+      - {material_id: RM-DEXT, name: Dextromethorphan, quantity_kg: 6.0, variability: 0.025}
+      - {material_id: RM-SORB, name: Sorbitol, quantity_kg: 140.0, variability: 0.03}
+    process_parameters:
+      MIXING:
+        rpm: {target: 135.0, min: 110.0, max: 158.0, unit: rpm}
+        batch_time: {target: 26.0, min: 22.0, max: 33.0, unit: min}
+      FILLING:
+        fill_volume_ml: {target: 60.0, min: 58.5, max: 61.5, unit: ml}
+    qc_specifications: [mix_uniformity, fill_volume, final_assay]
+    qc_overrides:
+      fill_volume: {target: 60.0, lower_limit: 58.5, upper_limit: 61.5}

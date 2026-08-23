@@ -1,0 +1,30 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Generated data. These are outputs of a run, not inputs; regenerate with
+#   python -m pharma_sim run --days 30
+data/
+exports/
+schemas/
+*.db
+*.db-wal
+*.db-shm
+*.parquet
+*.jsonl
+
+# OS
+.DS_Store

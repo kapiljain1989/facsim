@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pharma Factory Simulator — Dashboard</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1 id="plant-name">Pharmaceutical Factory Simulator</h1>
+    <span class="sub" id="plant-sub">connecting…</span>
+  </div>
+
+  <nav id="nav" aria-label="Views">
+    <button data-view="plant" aria-current="page">Plant</button>
+    <button data-view="units">Units</button>
+    <button data-view="machines">Machines</button>
+    <button data-view="batches">Batches</button>
+    <button data-view="quality">Quality</button>
+    <button data-view="reliability">Reliability</button>
+    <button data-view="people">People</button>
+    <button data-view="events">Events</button>
+  </nav>
+
+  <div class="header-tools">
+    <span class="live-badge" id="live-badge" title="Live feed status">
+      <span class="dot" aria-hidden="true"></span><span id="live-text">historical</span>
+    </span>
+    <button class="icon-button" id="theme-toggle" title="Toggle light/dark">◐ Theme</button>
+  </div>
+</header>
+
+<main>
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- ============================================================ PLANT -->
+  <section class="view" id="view-plant">
+    <div class="section-head">
+      <h2>Plant overview</h2>
+      <span class="hint" id="plant-hint"></span>
+    </div>
+
+    <div class="grid tiles" id="plant-tiles"></div>
+
+    <div class="grid halves" style="margin-top:14px">
+      <div class="card">
+        <h3>Machine state right now</h3>
+        <p class="card-sub">Reserved status colours; each segment is labelled.</p>
+        <div id="state-bar"></div>
+        <div class="table-wrap" style="max-height:230px;margin-top:10px">
+          <table>
+            <thead><tr><th>State</th><th class="num">Machines</th><th class="num">Share</th></tr></thead>
+            <tbody id="state-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Production per shift</h3>
+        <p class="card-sub">Good and rejected units — same unit of measure, one axis.</p>
+        <div id="legend-production"></div>
+        <div id="chart-production"></div>
+      </div>
+    </div>
+
+    <div class="grid halves" style="margin-top:14px">
+      <div class="card">
+        <h3>OEE per shift</h3>
+        <p class="card-sub">Availability, performance and quality are all ratios, so they share an axis honestly.</p>
+        <div id="legend-oee"></div>
+        <div id="chart-oee"></div>
+      </div>
+      <div class="card">
+        <h3>OEE by unit</h3>
+        <p class="card-sub">One series, one colour — bar length already carries the magnitude.</p>
+        <div id="chart-unit-oee"></div>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <h2>Recent activity</h2>
+      <span class="hint">newest first</span>
+    </div>
+    <div class="card"><ul class="timeline" id="plant-timeline"></ul></div>
+  </section>
+
+  <!-- ============================================================ UNITS -->
+  <section class="view" id="view-units" hidden>
+    <div class="section-head"><h2>Production units</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Unit</th><th>Name</th><th>Stage</th>
+          <th class="num">Machines</th><th class="num">Workers</th>
+          <th class="num">OEE</th><th class="num">Good</th><th class="num">Rejects</th>
+          <th class="num">Downtime (h)</th><th class="num">Failures</th>
+        </tr></thead>
+        <tbody id="units-table"></tbody>
+      </table>
+    </div>
+    <div class="grid halves" style="margin-top:14px">
+      <div class="card">
+        <h3>Good output by unit</h3>
+        <p class="card-sub">Cumulative units produced.</p>
+        <div id="chart-unit-output"></div>
+      </div>
+      <div class="card">
+        <h3>Unplanned downtime by unit</h3>
+        <p class="card-sub">Hours lost to faults and repairs.</p>
+        <div id="chart-unit-downtime"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= MACHINES -->
+  <section class="view" id="view-machines" hidden>
+    <div class="section-head">
+      <h2>Machines</h2>
+      <span class="hint">select a row to inspect its sensors</span>
+    </div>
+    <div class="controls">
+      <label class="field">Unit
+        <select id="machine-unit-filter"><option value="">all units</option></select>
+      </label>
+      <label class="field">State
+        <select id="machine-state-filter"><option value="">all states</option></select>
+      </label>
+      <label class="field">Search
+        <input type="search" id="machine-search" placeholder="machine or class">
+      </label>
+    </div>
+    <div class="table-wrap" style="max-height:330px">
+      <table>
+        <thead><tr>
+          <th>Machine</th><th>Class</th><th>Unit</th><th>State</th>
+          <th class="num">OEE</th><th class="num">Good</th><th class="num">Rejects</th>
+          <th class="num">Runtime (h)</th><th class="num">Downtime (h)</th>
+          <th class="num">Failures</th><th class="num">Sensors</th>
+        </tr></thead>
+        <tbody id="machines-table"></tbody>
+      </table>
+    </div>
+
+    <div class="detail-panel" id="machine-detail" hidden>
+      <div class="section-head">
+        <h2 id="machine-detail-title">Machine</h2>
+        <span class="hint" id="machine-detail-sub"></span>
+        <span class="spacer"></span>
+        <label class="field">Window
+          <select id="machine-window">
+            <option value="1">last 1 h</option>
+            <option value="6" selected>last 6 h</option>
+            <option value="24">last 24 h</option>
+            <option value="72">last 72 h</option>
+            <option value="168">last 7 d</option>
+          </select>
+        </label>
+      </div>
+      <div class="grid thirds">
+        <div class="card"><dl class="kv" id="machine-facts"></dl></div>
+        <div class="card">
+          <h3>Current values</h3>
+          <p class="card-sub">The table view that accompanies the charts.</p>
+          <div class="table-wrap" style="max-height:420px;border:none">
+            <table><thead><tr><th>Tag</th><th class="num">Value</th><th>Unit</th><th>Quality</th></tr></thead>
+            <tbody id="machine-values"></tbody></table>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Recent machine events</h3>
+          <p class="card-sub">State changes, alarms and failures.</p>
+          <ul class="timeline" id="machine-timeline" style="max-height:420px;overflow:auto"></ul>
+        </div>
+      </div>
+      <div class="section-head">
+        <h2>Sensors</h2>
+        <span class="hint">one chart per tag — different units never share an axis</span>
+      </div>
+      <div id="machine-charts"></div>
+    </div>
+  </section>
+
+  <!-- ========================================================== BATCHES -->
+  <section class="view" id="view-batches" hidden>
+    <div class="section-head">
+      <h2>Batches</h2>
+      <span class="hint">select a row for its full genealogy</span>
+    </div>
+    <div class="controls">
+      <label class="field">Disposition
+        <select id="batch-disposition">
+          <option value="">all</option>
+          <option value="RELEASED">released</option>
+          <option value="REJECTED">rejected</option>
+          <option value="QUARANTINED">quarantined</option>
+          <option value="IN_PROCESS">in process</option>
+        </select>
+      </label>
+    </div>
+    <div class="table-wrap" style="max-height:330px">
+      <table>
+        <thead><tr>
+          <th>Batch</th><th>Product</th><th>Disposition</th>
+          <th class="num">Stages</th><th class="num">QC tests</th><th class="num">QC failures</th>
+          <th>Started</th><th>Completed</th>
+        </tr></thead>
+        <tbody id="batches-table"></tbody>
+      </table>
+    </div>
+
+    <div class="detail-panel" id="batch-detail" hidden>
+      <div class="section-head">
+        <h2 id="batch-detail-title">Batch</h2>
+        <span class="hint" id="batch-detail-sub"></span>
+      </div>
+      <div class="grid halves">
+        <div class="card">
+          <h3>Stage by stage</h3>
+          <p class="card-sub">Achieved process values are the measured means from the telemetry.</p>
+          <div class="table-wrap" style="max-height:280px;border:none">
+            <table><thead><tr><th>#</th><th>Stage</th><th>Machine</th><th>Result</th><th class="wrap">Achieved parameters</th></tr></thead>
+            <tbody id="batch-stages"></tbody></table>
+          </div>
+        </div>
+        <div class="card">
+          <h3>QC results</h3>
+          <p class="card-sub">Each value computed from the process conditions above.</p>
+          <div class="table-wrap" style="max-height:280px;border:none">
+            <table><thead><tr><th>Parameter</th><th>Phase</th><th class="num">Actual</th><th class="num">Target</th><th>Limits</th><th>Result</th></tr></thead>
+            <tbody id="batch-qc"></tbody></table>
+          </div>
+        </div>
+      </div>
+      <div class="grid halves" style="margin-top:14px">
+        <div class="card">
+          <h3>Investigations</h3>
+          <p class="card-sub">Deviation, root-cause analysis and corrective action.</p>
+          <div id="batch-investigations"></div>
+        </div>
+        <div class="card">
+          <h3>Batch timeline</h3>
+          <p class="card-sub">Every event that named this batch.</p>
+          <ul class="timeline" id="batch-timeline"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================== QUALITY -->
+  <section class="view" id="view-quality" hidden>
+    <div class="section-head"><h2>Quality</h2></div>
+    <div class="grid tiles" id="quality-tiles"></div>
+    <div class="grid halves" style="margin-top:14px">
+      <div class="card">
+        <h3>Failures by QC parameter</h3>
+        <p class="card-sub">Which tests actually fail, and how often.</p>
+        <div id="chart-qc-failures"></div>
+      </div>
+      <div class="card">
+        <h3>QC parameters</h3>
+        <p class="card-sub">Mean measured value against target.</p>
+        <div class="table-wrap" style="max-height:300px;border:none">
+          <table><thead><tr><th>Parameter</th><th>Phase</th><th class="num">Tests</th><th class="num">Failures</th><th class="num">Out of trend</th><th class="num">Mean</th><th class="num">Target</th></tr></thead>
+          <tbody id="qc-parameter-table"></tbody></table>
+        </div>
+      </div>
+    </div>
+    <div class="section-head"><h2>Deviations</h2></div>
+    <div class="table-wrap" style="max-height:300px">
+      <table><thead><tr><th>Deviation</th><th>Severity</th><th>Status</th><th>Machine</th><th>Batch</th><th class="wrap">Description</th><th>RCA</th><th>CAPA</th></tr></thead>
+      <tbody id="deviations-table"></tbody></table>
+    </div>
+    <div class="section-head"><h2>Recent QC results</h2></div>
+    <div class="controls">
+      <label class="field">Result
+        <select id="qc-result-filter">
+          <option value="">all</option><option value="PASS">pass</option>
+          <option value="OOT">out of trend</option><option value="FAIL">fail</option>
+          <option value="OOS">out of specification</option>
+        </select>
+      </label>
+    </div>
+    <div class="table-wrap" style="max-height:340px">
+      <table><thead><tr><th>Test</th><th>Batch</th><th>Parameter</th><th>Phase</th><th class="num">Actual</th><th class="num">Target</th><th>Limits</th><th>Result</th><th>When</th></tr></thead>
+      <tbody id="qc-table"></tbody></table>
+    </div>
+  </section>
+
+  <!-- ====================================================== RELIABILITY -->
+  <section class="view" id="view-reliability" hidden>
+    <div class="section-head"><h2>Reliability</h2></div>
+    <div class="grid tiles" id="reliability-tiles"></div>
+    <div class="grid halves" style="margin-top:14px">
+      <div class="card">
+        <h3>Downtime by failure category</h3>
+        <p class="card-sub">Which class of fault costs the most time.</p>
+        <div id="chart-failure-downtime"></div>
+      </div>
+      <div class="card">
+        <h3>Root causes concluded</h3>
+        <p class="card-sub">What the investigations decided — a claim, which may be wrong.</p>
+        <div id="chart-root-causes"></div>
+      </div>
+    </div>
+    <div class="section-head">
+      <h2>Failures</h2>
+      <span class="hint">the operational record: category and symptom, never the mode or root cause</span>
+    </div>
+    <div class="table-wrap" style="max-height:300px">
+      <table><thead><tr><th>Failure</th><th>Machine</th><th>Category</th><th>Severity</th><th class="wrap">Symptom</th><th class="num">Downtime (min)</th><th>Detected</th><th>Resolved</th></tr></thead>
+      <tbody id="failures-table"></tbody></table>
+    </div>
+    <div class="section-head"><h2>Root-cause analyses</h2></div>
+    <div class="table-wrap" style="max-height:300px">
+      <table><thead><tr><th>RCA</th><th>Machine</th><th>Root cause</th><th class="num">Confidence</th><th>Fishbone</th><th class="wrap">Evidence</th></tr></thead>
+      <tbody id="rca-table"></tbody></table>
+    </div>
+    <div class="section-head"><h2>Corrective and preventive actions</h2></div>
+    <div class="table-wrap" style="max-height:280px">
+      <table><thead><tr><th>CAPA</th><th>Status</th><th>Root cause</th><th class="num">Verified</th><th class="wrap">Corrective action</th><th class="wrap">Preventive action</th></tr></thead>
+      <tbody id="capa-table"></tbody></table>
+    </div>
+    <div class="section-head"><h2>Maintenance</h2></div>
+    <div class="table-wrap" style="max-height:280px">
+      <table><thead><tr><th>Maintenance</th><th>Machine</th><th>Type</th><th>Status</th><th class="num">Duration (h)</th><th class="num">Cost</th><th class="wrap">Parts</th><th>Scheduled</th></tr></thead>
+      <tbody id="maintenance-table"></tbody></table>
+    </div>
+  </section>
+
+  <!-- =========================================================== PEOPLE -->
+  <section class="view" id="view-people" hidden>
+    <div class="section-head"><h2>Shifts</h2></div>
+    <div class="table-wrap" style="max-height:300px">
+      <table><thead><tr><th>Shift</th><th>Code</th><th>Date</th><th>Start</th><th>End</th><th class="num">Roster</th><th class="num">Present</th><th class="num">Absent</th><th class="num">OEE</th></tr></thead>
+      <tbody id="shifts-table"></tbody></table>
+    </div>
+    <div class="section-head"><h2>Workforce</h2></div>
+    <div class="controls">
+      <label class="field">Unit
+        <select id="people-unit-filter"><option value="">all units</option></select>
+      </label>
+    </div>
+    <div class="table-wrap" style="max-height:380px">
+      <table><thead><tr><th>Employee</th><th>Name</th><th>Unit</th><th>Role</th><th>Skill</th><th>Shift</th><th class="num">Experience (y)</th><th class="num">Attendance</th><th class="wrap">Certifications</th></tr></thead>
+      <tbody id="employees-table"></tbody></table>
+    </div>
+  </section>
+
+  <!-- =========================================================== EVENTS -->
+  <section class="view" id="view-events" hidden>
+    <div class="section-head">
+      <h2>Event stream</h2>
+      <span class="hint" id="events-hint"></span>
+    </div>
+    <div class="controls">
+      <label class="field">Category
+        <select id="event-category"><option value="">all</option></select>
+      </label>
+      <label class="field">Severity
+        <select id="event-severity">
+          <option value="">all</option><option value="INFO">info</option>
+          <option value="MINOR">minor</option><option value="MAJOR">major</option>
+          <option value="CRITICAL">critical</option>
+        </select>
+      </label>
+    </div>
+    <div class="table-wrap" style="max-height:640px">
+      <table><thead><tr><th>When</th><th>Event</th><th>Severity</th><th>Unit</th><th>Machine</th><th>Batch</th><th class="wrap">Detail</th></tr></thead>
+      <tbody id="events-table"></tbody></table>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span id="footer-note"></span>
+  Read-only dashboard — no authentication and no write endpoints by design.
+  This is a simulation and synthetic-data platform, not a GMP production-control system.
+</footer>
+
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

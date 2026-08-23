@@ -1,0 +1,797 @@
+# Failure modes, hazard model and precursor signatures.
+#
+# Failures are RANDOM AND RARE, but never a flat coin flip. For each machine and
+# each applicable mode the engine evaluates a hazard:
+#
+#   lambda(t) = (beta/mtbf) * (h/mtbf)^(beta-1)
+#               * age * operating_hours * maintenance_debt * load * environment * operator
+#   P(initiate in dt) = 1 - exp(-lambda * dt)
+#
+# beta > 1 gives wear-out (probability rises with accumulated operating hours);
+# beta == 1 gives a memoryless mode such as a grid interruption.
+#
+# When a mode initiates it does NOT fault immediately. An incubation period is
+# sampled and the fault is SCHEDULED, during which the machine's degradation
+# index climbs and drives the `precursors` below. That is what makes the
+# observable causal chain of §16 real, and what makes exact remaining-useful-life
+# labels possible. If maintenance intervenes first, the failure is AVERTED and
+# labelled as such.
+#
+# Applicability: `sensor_profiles` matches classes that inherit those profiles;
+# `equipment_classes` names classes directly. Both empty means every machine.
+
+hazard_scale: 0.33          # global tuning knob for overall failure frequency
+max_concurrent_modes: 2
+
+# Each factor is a declarative curve over an engine-supplied driver (§14).
+hazard_factors:
+  age:
+    intercept: 1.0
+    terms: [{input: age_years, coef: 0.07}]
+  operating_hours:
+    intercept: 1.0
+    terms: [{input: operating_khours, coef: 0.06}]
+  maintenance_debt:
+    intercept: 1.0
+    terms: [{input: pm_overdue_ratio, coef: 0.9}]
+    clip_max: 4.0
+  load:
+    intercept: 0.55
+    terms: [{input: load_factor, coef: 0.45}]
+  environment:
+    intercept: 0.85
+    terms: [{input: environment_stress, coef: 0.35}]
+  operator:
+    intercept: 0.95
+    terms: [{input: operator_inexperience, coef: 0.30}]
+
+failure_modes:
+
+  # ======================= MECHANICAL =======================================
+  # The canonical §42 chain: lubrication loss -> vibration, current and
+  # temperature all climb together -> warning -> fault -> compression force
+  # drifts high -> tablet hardness fails QC.
+  - id: BEARING_FAILURE
+    category: MECHANICAL
+    description: Progressive bearing wear from lubrication breakdown.
+    sensor_profiles: [tablet_press, granulator, blender, cone_mill, capsule_filler]
+    mtbf_operating_hours: 3800.0
+    weibull_beta: 2.4
+    incubation_hours_min: 24.0
+    incubation_hours_max: 168.0
+    severity: MAJOR
+    root_cause: INSUFFICIENT_LUBRICATION
+    root_cause_description: Lubrication interval exceeded, allowing metal-to-metal contact.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: vibration, delta_fraction: 1.10, curve: exponential, sigma_growth: 0.65}
+      - {tag: motor_current, delta_fraction: 0.18, curve: exponential, sigma_growth: 0.20}
+      - {tag: temperature, delta_fraction: 0.20, delta_absolute: 8.0, curve: late_knee, sigma_growth: 0.15}
+    effects:
+      production_rate_factor: 0.0
+      reject_rate_add: 0.055
+      process_variability_gain: 0.60
+      process_parameter_shifts:
+        main_compression_force: 10.0
+        tablet_weight: 20.0
+        fill_weight: 14.0
+    repair:
+      duration_hours: 6.0
+      cost: 1250.0
+      parts: [bearing set, seal kit, lubricant]
+      technicians: 2
+
+  - id: MOTOR_FAILURE
+    category: MECHANICAL
+    description: Motor winding insulation degradation.
+    sensor_profiles: [tablet_press, granulator, blender, cone_mill, capsule_filler]
+    mtbf_operating_hours: 5200.0
+    weibull_beta: 2.1
+    incubation_hours_min: 24.0
+    incubation_hours_max: 168.0
+    severity: MAJOR
+    root_cause: MOTOR_WINDING_DEGRADATION
+    root_cause_description: Thermal cycling has degraded winding insulation resistance.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: motor_current, delta_fraction: 0.32, curve: exponential, sigma_growth: 0.35}
+      - {tag: temperature, delta_fraction: 0.28, delta_absolute: 6.0, curve: exponential, sigma_growth: 0.25}
+      - {tag: vibration, delta_fraction: 0.45, curve: linear, sigma_growth: 0.30}
+    effects:
+      reject_rate_add: 0.035
+      process_variability_gain: 0.45
+    repair:
+      duration_hours: 9.0
+      cost: 3200.0
+      parts: [motor assembly, coupling]
+      technicians: 2
+
+  - id: GEAR_FAILURE
+    category: MECHANICAL
+    description: Gearbox tooth wear under repeated high-torque duty.
+    sensor_profiles: [granulator]
+    mtbf_operating_hours: 6000.0
+    weibull_beta: 2.6
+    incubation_hours_min: 24.0
+    incubation_hours_max: 168.0
+    severity: MAJOR
+    root_cause: GEAR_TOOTH_WEAR
+    root_cause_description: Cumulative contact fatigue on the reduction gear.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: torque, delta_fraction: 0.42, curve: exponential, sigma_growth: 0.45}
+      - {tag: vibration, delta_fraction: 0.85, curve: exponential, sigma_growth: 0.60}
+      - {tag: motor_current, delta_fraction: 0.20, curve: linear, sigma_growth: 0.20}
+    effects:
+      reject_rate_add: 0.040
+      process_variability_gain: 0.55
+      process_parameter_shifts:
+        impeller_speed: -70.0
+        granulation_time: 8.0
+    repair:
+      duration_hours: 11.0
+      cost: 4100.0
+      parts: [gear set, gearbox oil]
+      technicians: 3
+
+  - id: PUMP_FAILURE
+    category: MECHANICAL
+    description: Peristaltic/spray pump seal wear reducing delivered flow.
+    sensor_profiles: [coating_machine]
+    mtbf_operating_hours: 4200.0
+    weibull_beta: 1.9
+    incubation_hours_min: 18.0
+    incubation_hours_max: 168.0
+    severity: MAJOR
+    root_cause: PUMP_SEAL_WEAR
+    root_cause_description: Elastomer seal degradation causing internal bypass.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: pump_speed, delta_fraction: -0.28, curve: linear, sigma_growth: 0.30}
+      - {tag: spray_pressure, delta_fraction: -0.35, curve: exponential, sigma_growth: 0.40}
+      - {tag: spray_rate, delta_fraction: -0.30, curve: exponential, sigma_growth: 0.35}
+    effects:
+      reject_rate_add: 0.030
+      process_variability_gain: 0.50
+      process_parameter_shifts:
+        spray_rate: -55.0
+    repair:
+      duration_hours: 4.0
+      cost: 780.0
+      parts: [pump seal kit, tubing]
+      technicians: 1
+
+  - id: VALVE_FAILURE
+    category: MECHANICAL
+    description: Steam valve seat erosion in the sterilizer.
+    sensor_profiles: [autoclave]
+    mtbf_operating_hours: 5800.0
+    weibull_beta: 2.0
+    incubation_hours_min: 24.0
+    incubation_hours_max: 168.0
+    severity: MAJOR
+    root_cause: VALVE_SEAT_EROSION
+    root_cause_description: Wire-drawing erosion of the steam control valve seat.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: steam_pressure, delta_fraction: -0.26, curve: exponential, sigma_growth: 0.30}
+      - {tag: pressure, delta_fraction: -0.12, curve: linear, sigma_growth: 0.25}
+      - {tag: cycle_time, delta_fraction: 0.22, curve: linear, sigma_growth: 0.20}
+    effects:
+      reject_rate_add: 0.020
+      process_variability_gain: 0.40
+      process_parameter_shifts:
+        cycle_time: -14.0
+    repair:
+      duration_hours: 5.0
+      cost: 1450.0
+      parts: [control valve, gasket set]
+      technicians: 2
+
+  - id: BELT_FAILURE
+    category: MECHANICAL
+    description: Drive belt / foil web tension loss on a packaging line.
+    sensor_profiles: [packaging_machine]
+    mtbf_operating_hours: 3600.0
+    weibull_beta: 2.2
+    incubation_hours_min: 12.0
+    incubation_hours_max: 168.0
+    severity: MINOR
+    root_cause: BELT_TENSION_LOSS
+    root_cause_description: Belt elongation past the tensioner's adjustment range.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: line_speed, delta_fraction: -0.22, curve: linear, sigma_growth: 0.35}
+      - {tag: motor_current, delta_fraction: 0.24, curve: exponential, sigma_growth: 0.25}
+      - {tag: foil_tension, delta_fraction: -0.35, curve: exponential, sigma_growth: 0.45}
+    effects:
+      reject_rate_add: 0.045
+      process_variability_gain: 0.35
+      process_parameter_shifts:
+        sealing_temperature: -20.0
+    repair:
+      duration_hours: 2.5
+      cost: 320.0
+      parts: [drive belt]
+      technicians: 1
+
+  # ======================= ELECTRICAL =======================================
+  - id: MOTOR_OVERLOAD
+    category: ELECTRICAL
+    description: Sustained current draw above nameplate rating.
+    sensor_profiles:
+      [tablet_press, granulator, blender, cone_mill, capsule_filler, packaging_machine]
+    mtbf_operating_hours: 7000.0
+    weibull_beta: 1.4
+    incubation_hours_min: 4.0
+    incubation_hours_max: 96.0
+    severity: MAJOR
+    root_cause: EXCESSIVE_MECHANICAL_LOAD
+    root_cause_description: Product load or feed rate above the drive's design duty.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: motor_current, delta_fraction: 0.40, curve: quadratic, sigma_growth: 0.25}
+      - {tag: temperature, delta_fraction: 0.22, curve: exponential, sigma_growth: 0.20}
+    effects:
+      reject_rate_add: 0.025
+      process_variability_gain: 0.30
+    repair:
+      duration_hours: 2.0
+      cost: 260.0
+      parts: [overload relay]
+      technicians: 1
+
+  - id: VFD_FAILURE
+    category: ELECTRICAL
+    description: Variable frequency drive DC-link capacitor ageing.
+    sensor_profiles:
+      [tablet_press, granulator, blender, cone_mill, capsule_filler, packaging_machine]
+    mtbf_operating_hours: 9000.0
+    weibull_beta: 1.7
+    incubation_hours_min: 24.0
+    incubation_hours_max: 168.0
+    severity: MAJOR
+    root_cause: VFD_CAPACITOR_AGEING
+    root_cause_description: Electrolytic capacitor ESR rise causing unstable drive output.
+    warning_threshold: 0.38
+    precursors:
+      # Erratic rather than large: the signature here is variance, not mean.
+      - {tag: motor_current, delta_fraction: 0.16, curve: linear, sigma_growth: 1.30}
+    effects:
+      reject_rate_add: 0.030
+      process_variability_gain: 0.70
+    repair:
+      duration_hours: 4.5
+      cost: 1900.0
+      parts: [VFD module]
+      technicians: 2
+
+  - id: POWER_FAILURE
+    category: ELECTRICAL
+    description: Loss of incoming supply; no precursor exists to observe.
+    mtbf_operating_hours: 15000.0
+    weibull_beta: 1.0
+    incubation_hours_min: 0.05
+    incubation_hours_max: 0.20
+    severity: MAJOR
+    root_cause: GRID_SUPPLY_INTERRUPTION
+    root_cause_description: External distribution network interruption.
+    detectable: false
+    effects:
+      reject_rate_add: 0.020
+    repair:
+      duration_hours: 1.0
+      cost: 150.0
+      parts: []
+      technicians: 1
+
+  - id: CONTROL_PANEL_FAILURE
+    category: ELECTRICAL
+    description: Control wiring or contactor fault, without a sensed precursor.
+    mtbf_operating_hours: 12000.0
+    weibull_beta: 1.3
+    incubation_hours_min: 0.5
+    incubation_hours_max: 8.0
+    severity: MAJOR
+    root_cause: CONTROL_WIRING_FAULT
+    root_cause_description: Loose terminal or failed contactor in the control panel.
+    detectable: false
+    effects:
+      reject_rate_add: 0.015
+    repair:
+      duration_hours: 3.5
+      cost: 640.0
+      parts: [contactor, terminal block]
+      technicians: 1
+
+  # ======================= SENSOR / INSTRUMENT ==============================
+  # These degrade the *measurement*, not the machine — which is exactly why RCA
+  # has to distinguish them from a real process problem.
+  - id: TEMPERATURE_SENSOR_FAILURE
+    category: SENSOR
+    description: RTD drift and increasing noise.
+    sensor_profiles: [tablet_press, granulator, blender, cone_mill, capsule_filler, autoclave]
+    mtbf_operating_hours: 8000.0
+    weibull_beta: 1.2
+    incubation_hours_min: 24.0
+    incubation_hours_max: 168.0
+    severity: MINOR
+    root_cause: SENSOR_CALIBRATION_DRIFT
+    root_cause_description: Thermocouple/RTD calibration drift beyond tolerance.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: temperature, delta_fraction: 0.12, curve: linear, sigma_growth: 2.50}
+    effects:
+      reject_rate_add: 0.008
+      process_variability_gain: 0.20
+    repair:
+      duration_hours: 1.5
+      cost: 220.0
+      parts: [temperature probe]
+      technicians: 1
+
+  - id: PRESSURE_SENSOR_FAILURE
+    category: SENSOR
+    description: Pressure transducer zero drift.
+    equipment_classes: [fluid_bed_dryer, high_shear_granulator, mixing_system, autoclave]
+    mtbf_operating_hours: 8600.0
+    weibull_beta: 1.2
+    incubation_hours_min: 24.0
+    incubation_hours_max: 168.0
+    severity: MINOR
+    root_cause: PRESSURE_TRANSDUCER_DRIFT
+    root_cause_description: Transducer diaphragm fatigue causing zero-point drift.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: pressure, delta_fraction: 0.15, curve: linear, sigma_growth: 2.40}
+    effects:
+      reject_rate_add: 0.006
+      process_variability_gain: 0.18
+    repair:
+      duration_hours: 1.5
+      cost: 280.0
+      parts: [pressure transducer]
+      technicians: 1
+
+  - id: VIBRATION_SENSOR_FAILURE
+    category: SENSOR
+    description: Accelerometer mounting loosening; readings fall and go erratic.
+    sensor_profiles: [tablet_press, granulator, blender, cone_mill, capsule_filler]
+    mtbf_operating_hours: 9500.0
+    weibull_beta: 1.1
+    incubation_hours_min: 24.0
+    incubation_hours_max: 168.0
+    severity: MINOR
+    root_cause: ACCELEROMETER_MOUNT_LOOSE
+    root_cause_description: Sensor stud torque loss decoupling it from the housing.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: vibration, delta_fraction: -0.30, curve: linear, sigma_growth: 3.00}
+    effects:
+      reject_rate_add: 0.002
+    repair:
+      duration_hours: 1.0
+      cost: 180.0
+      parts: [accelerometer, mounting stud]
+      technicians: 1
+
+  - id: WEIGHT_SENSOR_FAILURE
+    category: SENSOR
+    description: Load cell calibration drift on weighing and filling equipment.
+    equipment_classes: [tablet_press, weighing_scale, capsule_filling_machine]
+    mtbf_operating_hours: 7800.0
+    weibull_beta: 1.3
+    incubation_hours_min: 24.0
+    incubation_hours_max: 168.0
+    severity: MAJOR
+    root_cause: LOAD_CELL_CALIBRATION_DRIFT
+    root_cause_description: Load cell creep shifting the indicated weight.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: tablet_weight, delta_fraction: 0.030, curve: linear, sigma_growth: 2.60}
+      - {tag: dispensed_weight, delta_fraction: 0.012, curve: linear, sigma_growth: 2.60}
+      - {tag: fill_weight, delta_fraction: 0.022, curve: linear, sigma_growth: 2.60}
+    effects:
+      reject_rate_add: 0.020
+      process_variability_gain: 0.45
+      process_parameter_shifts:
+        tablet_weight: 22.0
+        dispensed_weight: 0.62
+        fill_weight: 16.0
+    repair:
+      duration_hours: 2.0
+      cost: 420.0
+      parts: [load cell, calibration weights]
+      technicians: 1
+
+  # ======================= PROCESS ==========================================
+  - id: HIGH_TEMPERATURE
+    category: PROCESS
+    description: Machine running hot from insufficient cooling.
+    sensor_profiles: [tablet_press, granulator, blender, cone_mill, capsule_filler]
+    mtbf_operating_hours: 6500.0
+    weibull_beta: 1.5
+    incubation_hours_min: 6.0
+    incubation_hours_max: 120.0
+    severity: MINOR
+    root_cause: COOLING_INSUFFICIENT
+    root_cause_description: Cooling circuit fouling or fan underperformance.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: temperature, delta_fraction: 0.35, curve: exponential, sigma_growth: 0.30}
+    effects:
+      reject_rate_add: 0.025
+      process_variability_gain: 0.35
+    repair:
+      duration_hours: 2.5
+      cost: 340.0
+      parts: [cooling fan, filter]
+      technicians: 1
+
+  - id: DRYING_OVERTEMPERATURE
+    category: PROCESS
+    description: Inlet air control drift driving product over-drying.
+    equipment_classes: [fluid_bed_dryer, coating_pan]
+    mtbf_operating_hours: 5000.0
+    weibull_beta: 1.6
+    incubation_hours_min: 8.0
+    incubation_hours_max: 168.0
+    severity: MAJOR
+    root_cause: HEATER_CONTROL_DRIFT
+    root_cause_description: Heater control loop calibration drift overshooting setpoint.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: inlet_temperature, delta_fraction: 0.22, curve: exponential, sigma_growth: 0.25}
+      - {tag: outlet_temperature, delta_fraction: 0.18, curve: exponential, sigma_growth: 0.20}
+    effects:
+      reject_rate_add: 0.030
+      process_variability_gain: 0.40
+      # Over-drying: moisture falls, impurities rise, tablets get brittle (§17).
+      process_parameter_shifts:
+        inlet_temperature: 20.0
+    repair:
+      duration_hours: 3.0
+      cost: 560.0
+      parts: [heater controller]
+      technicians: 1
+
+  - id: LOW_AIRFLOW
+    category: PROCESS
+    description: Progressive filter blockage starving airflow.
+    equipment_classes: [fluid_bed_dryer, coating_pan, hvac, air_handling_system, dust_extraction, drying_air_system, blower]
+    mtbf_operating_hours: 3200.0
+    weibull_beta: 2.3
+    incubation_hours_min: 24.0
+    incubation_hours_max: 168.0
+    severity: MAJOR
+    root_cause: FILTER_BLOCKAGE
+    root_cause_description: Particulate loading on the inlet filter bank.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: airflow, delta_fraction: -0.32, curve: exponential, sigma_growth: 0.30}
+      - {tag: fan_speed, delta_fraction: -0.15, curve: linear, sigma_growth: 0.20}
+    effects:
+      reject_rate_add: 0.030
+      process_variability_gain: 0.45
+      process_parameter_shifts:
+        drying_time: 15.0
+    repair:
+      duration_hours: 2.0
+      cost: 300.0
+      parts: [inlet filter set]
+      technicians: 1
+
+  - id: HIGH_PRESSURE
+    category: PROCESS
+    description: Exhaust restriction raising chamber pressure.
+    equipment_classes: [fluid_bed_dryer, high_shear_granulator, mixing_system, autoclave]
+    mtbf_operating_hours: 7500.0
+    weibull_beta: 1.6
+    incubation_hours_min: 6.0
+    incubation_hours_max: 144.0
+    severity: MAJOR
+    root_cause: EXHAUST_RESTRICTION
+    root_cause_description: Partially blocked exhaust duct or stuck damper.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: pressure, delta_fraction: 0.40, curve: exponential, sigma_growth: 0.30}
+    effects:
+      reject_rate_add: 0.022
+      process_variability_gain: 0.30
+    repair:
+      duration_hours: 2.5
+      cost: 380.0
+      parts: [damper actuator]
+      technicians: 1
+
+  - id: HIGH_HUMIDITY
+    category: PROCESS
+    description: Dehumidification shortfall in the process air.
+    equipment_classes: [fluid_bed_dryer, coating_pan, autoclave]
+    mtbf_operating_hours: 6800.0
+    weibull_beta: 1.4
+    incubation_hours_min: 6.0
+    incubation_hours_max: 120.0
+    severity: MINOR
+    root_cause: DEHUMIDIFIER_UNDERPERFORMANCE
+    root_cause_description: Desiccant saturation reducing moisture removal.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: humidity, delta_fraction: 0.30, curve: exponential, sigma_growth: 0.25}
+    effects:
+      reject_rate_add: 0.018
+      process_variability_gain: 0.35
+      process_parameter_shifts:
+        drying_time: 11.0
+    repair:
+      duration_hours: 2.0
+      cost: 410.0
+      parts: [desiccant cartridge]
+      technicians: 1
+
+  - id: SPEED_DEVIATION
+    category: PROCESS
+    description: Drive speed drifting from commanded setpoint.
+    equipment_classes:
+      [tablet_press, blister_packaging_machine, cartoner, labeling_machine,
+       capsule_filling_machine]
+    mtbf_operating_hours: 8500.0
+    weibull_beta: 1.3
+    incubation_hours_min: 12.0
+    incubation_hours_max: 168.0
+    severity: MINOR
+    root_cause: DRIVE_CONTROL_MISCALIBRATION
+    root_cause_description: Encoder scaling or drive tuning drift.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: turret_speed, delta_fraction: -0.14, curve: linear, sigma_growth: 0.60}
+      - {tag: line_speed, delta_fraction: -0.16, curve: linear, sigma_growth: 0.60}
+      - {tag: machine_speed, delta_fraction: -0.15, curve: linear, sigma_growth: 0.60}
+    effects:
+      reject_rate_add: 0.020
+      process_variability_gain: 0.40
+      process_parameter_shifts:
+        turret_speed: -14.0
+    repair:
+      duration_hours: 1.5
+      cost: 210.0
+      parts: [encoder]
+      technicians: 1
+
+  # ======================= MATERIAL =========================================
+  - id: RAW_MATERIAL_SHORTAGE
+    category: MATERIAL
+    description: Feed material unavailable; the line waits.
+    mtbf_operating_hours: 16000.0
+    weibull_beta: 1.0
+    incubation_hours_min: 0.1
+    incubation_hours_max: 2.0
+    severity: MINOR
+    root_cause: SUPPLY_CHAIN_DELAY
+    root_cause_description: Upstream material delivery or dispensing queue delay.
+    detectable: false
+    effects:
+      reject_rate_add: 0.0
+    repair:
+      duration_hours: 3.0
+      cost: 0.0
+      parts: []
+      technicians: 1
+
+  - id: MATERIAL_VARIATION
+    category: MATERIAL
+    description: Incoming lot properties outside the usual band.
+    mtbf_operating_hours: 18000.0
+    weibull_beta: 1.0
+    incubation_hours_min: 0.5
+    incubation_hours_max: 12.0
+    severity: MINOR
+    root_cause: SUPPLIER_LOT_VARIABILITY
+    root_cause_description: Supplier lot particle size / moisture outside the usual band.
+    detectable: false
+    effects:
+      reject_rate_add: 0.025
+      process_variability_gain: 0.80
+    repair:
+      duration_hours: 1.0
+      cost: 0.0
+      parts: []
+      technicians: 1
+
+  - id: WRONG_MATERIAL
+    category: MATERIAL
+    description: Incorrect material presented to the process.
+    mtbf_operating_hours: 30000.0
+    weibull_beta: 1.0
+    incubation_hours_min: 0.1
+    incubation_hours_max: 1.0
+    severity: CRITICAL
+    root_cause: DISPENSING_LABEL_MIX_UP
+    root_cause_description: Label or container mix-up during dispensing.
+    detectable: false
+    effects:
+      reject_rate_add: 0.40
+      process_variability_gain: 1.20
+    repair:
+      duration_hours: 5.0
+      cost: 900.0
+      parts: []
+      technicians: 1
+
+  # ======================= HUMAN ============================================
+  - id: WRONG_SETUP
+    category: HUMAN
+    description: Machine set up outside the validated configuration.
+    mtbf_operating_hours: 16000.0
+    weibull_beta: 1.0
+    incubation_hours_min: 0.2
+    incubation_hours_max: 6.0
+    severity: MAJOR
+    root_cause: INADEQUATE_OPERATOR_TRAINING
+    root_cause_description: Setup performed by an operator without sufficient experience.
+    detectable: false
+    effects:
+      reject_rate_add: 0.045
+      process_variability_gain: 0.50
+      process_parameter_shifts:
+        main_compression_force: 4.2
+        blend_time: -9.0
+    repair:
+      duration_hours: 1.0
+      cost: 60.0
+      parts: []
+      technicians: 1
+
+  - id: INCORRECT_PARAMETER
+    category: HUMAN
+    description: A setpoint entered incorrectly on the HMI.
+    mtbf_operating_hours: 18000.0
+    weibull_beta: 1.0
+    incubation_hours_min: 0.2
+    incubation_hours_max: 8.0
+    severity: MAJOR
+    root_cause: PARAMETER_ENTRY_ERROR
+    root_cause_description: Recipe parameter keyed in outside the validated range.
+    detectable: false
+    effects:
+      reject_rate_add: 0.035
+      process_variability_gain: 0.30
+      process_parameter_shifts:
+        inlet_temperature: 14.0
+        main_compression_force: -4.2
+    repair:
+      duration_hours: 0.75
+      cost: 40.0
+      parts: []
+      technicians: 1
+
+  - id: MISSED_INSPECTION
+    category: HUMAN
+    description: In-process check not performed at the required interval.
+    mtbf_operating_hours: 24000.0
+    weibull_beta: 1.0
+    incubation_hours_min: 0.5
+    incubation_hours_max: 8.0
+    severity: MINOR
+    root_cause: PROCEDURE_NOT_FOLLOWED
+    root_cause_description: In-process control step omitted against the batch record.
+    detectable: false
+    effects:
+      reject_rate_add: 0.015
+    repair:
+      duration_hours: 0.5
+      cost: 30.0
+      parts: []
+      technicians: 1
+
+  - id: OPERATOR_ERROR
+    category: HUMAN
+    description: A handling or sequencing slip during operation.
+    mtbf_operating_hours: 14000.0
+    weibull_beta: 1.0
+    incubation_hours_min: 0.1
+    incubation_hours_max: 4.0
+    severity: MINOR
+    root_cause: OPERATOR_SLIP
+    root_cause_description: Momentary lapse during a manual operation.
+    detectable: false
+    effects:
+      reject_rate_add: 0.030
+      process_variability_gain: 0.25
+    repair:
+      duration_hours: 0.5
+      cost: 25.0
+      parts: []
+      technicians: 1
+
+  # ======================= ENVIRONMENTAL ====================================
+  - id: HVAC_FAILURE
+    category: ENVIRONMENTAL
+    description: HEPA loading collapsing room pressure cascade and airflow.
+    sensor_profiles: [hvac]
+    mtbf_operating_hours: 3000.0
+    weibull_beta: 2.0
+    incubation_hours_min: 24.0
+    incubation_hours_max: 168.0
+    severity: MAJOR
+    root_cause: HEPA_FILTER_LOADING
+    root_cause_description: Terminal HEPA filters loaded beyond their change-out point.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: differential_pressure, delta_fraction: -0.45, curve: exponential, sigma_growth: 0.35}
+      - {tag: airflow, delta_fraction: -0.35, curve: exponential, sigma_growth: 0.30}
+      - {tag: HEPA_pressure, delta_fraction: 0.30, curve: quadratic, sigma_growth: 0.25}
+      - {tag: fan_speed, delta_fraction: -0.20, curve: linear, sigma_growth: 0.20}
+    effects:
+      reject_rate_add: 0.020
+      process_variability_gain: 0.40
+    repair:
+      duration_hours: 5.0
+      cost: 1600.0
+      parts: [HEPA filter set, prefilters]
+      technicians: 2
+
+  - id: TEMPERATURE_EXCURSION
+    category: ENVIRONMENTAL
+    description: Room temperature drifting outside the qualified band.
+    equipment_classes: [hvac, air_handling_system, drying_air_system]
+    mtbf_operating_hours: 4500.0
+    weibull_beta: 1.5
+    incubation_hours_min: 4.0
+    incubation_hours_max: 96.0
+    severity: MAJOR
+    root_cause: CHILLER_CAPACITY_LOSS
+    root_cause_description: Chilled water capacity shortfall against room load.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: room_temperature, delta_fraction: 0.14, curve: exponential, sigma_growth: 0.40}
+    effects:
+      reject_rate_add: 0.015
+      process_variability_gain: 0.35
+    repair:
+      duration_hours: 4.0
+      cost: 980.0
+      parts: [chiller service kit]
+      technicians: 2
+
+  - id: HUMIDITY_EXCURSION
+    category: ENVIRONMENTAL
+    description: Room humidity drifting outside the qualified band.
+    equipment_classes: [hvac, air_handling_system]
+    mtbf_operating_hours: 4800.0
+    weibull_beta: 1.4
+    incubation_hours_min: 4.0
+    incubation_hours_max: 96.0
+    severity: MAJOR
+    root_cause: DEHUMIDIFICATION_LOSS
+    root_cause_description: Dehumidification coil or desiccant wheel underperformance.
+    warning_threshold: 0.38
+    precursors:
+      - {tag: room_humidity, delta_fraction: 0.25, curve: exponential, sigma_growth: 0.40}
+    effects:
+      reject_rate_add: 0.018
+      process_variability_gain: 0.40
+    repair:
+      duration_hours: 3.5
+      cost: 720.0
+      parts: [desiccant wheel belt]
+      technicians: 1
+
+  - id: POWER_INTERRUPTION
+    category: ENVIRONMENTAL
+    description: Brief supply transient tripping the drive.
+    mtbf_operating_hours: 11000.0
+    weibull_beta: 1.0
+    incubation_hours_min: 0.02
+    incubation_hours_max: 0.15
+    severity: MINOR
+    root_cause: UTILITY_TRANSIENT
+    root_cause_description: Voltage dip or transient on the incoming supply.
+    detectable: false
+    effects:
+      reject_rate_add: 0.012
+    repair:
+      duration_hours: 0.5
+      cost: 40.0
+      parts: []
+      technicians: 1

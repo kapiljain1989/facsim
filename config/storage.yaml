@@ -1,0 +1,62 @@
+# Polyglot storage: a different store and a different data structure for each
+# data shape, selected here rather than in code.
+#
+#   transactional  normalized, FK-enforced, indexed for point lookups and joins.
+#                  Business records: batches, QC, failures, maintenance, RCA, CAPA.
+#                  backend: sqlite | postgres
+#
+#   timeseries     narrow, append-only, columnar and compressed, no FKs. High
+#                  frequency machine telemetry only.
+#                  backend: parquet | clickhouse | timescale
+#
+#   evaluation     hidden ground truth and forward-looking prediction labels,
+#                  kept in a SEPARATE store so they cannot leak into an
+#                  operational query or export (§25).
+#                  backend: parquet | postgres | clickhouse
+#
+# The defaults below need no Docker, so tests and a first run work immediately.
+# For the production shape, switch transactional to postgres and timeseries to
+# clickhouse (see docker-compose.yml and the README).
+
+transactional:
+  backend: sqlite
+  dsn: ./data/factory.db
+  schema_name: oltp
+  batch_size: 1000
+
+timeseries:
+  backend: parquet
+  dsn: ./data/telemetry
+  database: pharma_ts
+  table: sensor_readings
+  schema_name: ts
+  partition_by: [date, unit_id]
+  batch_size: 50000
+
+evaluation:
+  backend: parquet
+  dsn: ./data/eval
+  schema_name: eval
+  batch_size: 10000
+
+# ---------------------------------------------------------------------------
+# Production profile, for reference — copy over the blocks above to use it:
+#
+# transactional:
+#   backend: postgres
+#   dsn: postgresql://pharma:pharma@localhost:5432/pharma
+#   schema_name: oltp
+#   batch_size: 5000
+#
+# timeseries:
+#   backend: clickhouse           # or: timescale (uses the postgres dsn, schema ts)
+#   dsn: clickhouse://default@localhost:9000/pharma_ts
+#   database: pharma_ts
+#   table: sensor_readings
+#   batch_size: 200000
+#
+# evaluation:
+#   backend: postgres
+#   dsn: postgresql://pharma:pharma@localhost:5432/pharma
+#   schema_name: eval
+# ---------------------------------------------------------------------------

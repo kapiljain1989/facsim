@@ -1,0 +1,82 @@
+# Production units. `sequence` defines process order; `process_stage` is the
+# token products reference in their manufacturing_process route.
+#
+# Unit count, worker headcount and staffing roles are all config: change them
+# here and the factory builder, shift rosters and tests follow.
+
+worker_roles: [OPERATOR, SENIOR_OPERATOR]
+manager_role: UNIT_MANAGER
+technician_role: TECHNICIAN
+qc_analyst_role: QC_ANALYST
+skill_levels: [JUNIOR, INTERMEDIATE, SENIOR]
+
+units:
+  - id: UNIT-01
+    name: Raw Material Dispensing
+    sequence: 1
+    process_stage: DISPENSING
+    worker_count: 10
+    environment_sensitivity: 1.2
+
+  - id: UNIT-02
+    name: Granulation
+    sequence: 2
+    process_stage: GRANULATION
+    worker_count: 10
+    environment_sensitivity: 1.1
+
+  - id: UNIT-03
+    name: Drying
+    sequence: 3
+    process_stage: DRYING
+    worker_count: 10
+    environment_sensitivity: 1.4
+
+  - id: UNIT-04
+    name: Milling
+    sequence: 4
+    process_stage: MILLING
+    worker_count: 10
+    environment_sensitivity: 1.0
+
+  - id: UNIT-05
+    name: Blending
+    sequence: 5
+    process_stage: BLENDING
+    worker_count: 10
+    environment_sensitivity: 1.0
+
+  - id: UNIT-06
+    name: Tablet Compression
+    sequence: 6
+    process_stage: COMPRESSION
+    worker_count: 10
+    environment_sensitivity: 1.3
+
+  - id: UNIT-07
+    name: Tablet Coating
+    sequence: 7
+    process_stage: COATING
+    worker_count: 10
+    environment_sensitivity: 1.5
+
+  - id: UNIT-08
+    name: Capsule Filling
+    sequence: 8
+    process_stage: CAPSULE_FILLING
+    worker_count: 10
+    environment_sensitivity: 1.2
+
+  - id: UNIT-09
+    name: Packaging
+    sequence: 9
+    process_stage: PACKAGING
+    worker_count: 10
+    environment_sensitivity: 0.8
+
+  - id: UNIT-10
+    name: Sterilization and Utilities
+    sequence: 10
+    process_stage: STERILIZATION
+    worker_count: 10
+    environment_sensitivity: 1.6

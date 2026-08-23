@@ -1,0 +1,92 @@
+# Infrastructure for the production storage shape and the live MQTT feed.
+#
+# None of this is needed for the default configuration: SQLite + Parquet + JSONL
+# run with no containers at all. Bring these up to exercise the polyglot path.
+#
+#   docker compose up -d postgres clickhouse mosquitto
+#   uv pip install -e ".[dev,postgres,clickhouse]"
+#   # then point config/storage.yaml at postgres + clickhouse
+
+services:
+  # Transactional store. The timescaledb image is used so the `ts` schema can
+  # host hypertables when timeseries.backend is `timescale`; the `oltp` schema
+  # works the same on stock Postgres.
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: pharma-postgres
+    environment:
+      POSTGRES_USER: pharma
+      POSTGRES_PASSWORD: pharma
+      POSTGRES_DB: pharma
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pharma -d pharma"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Time-series store for telemetry.
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    container_name: pharma-clickhouse
+    environment:
+      CLICKHOUSE_DB: pharma_ts
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "9000:9000"   # native protocol, used by clickhouse-driver
+      - "8123:8123"   # HTTP, useful for ad-hoc queries
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      # clickhouse-client ships in the image; wget and curl do not.
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # MQTT broker for the live feed.
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: pharma-mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -W 2 -q 1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # The simulator itself, wired to the services above. Runs a 7-day backfill and
+  # then streams live, which is the shape a downstream consumer would see.
+  simulator:
+    build: .
+    container_name: pharma-simulator
+    depends_on:
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+      mosquitto: { condition: service_started }
+    environment:
+      PHARMA_TRANSACTIONAL_BACKEND: postgres
+      PHARMA_TRANSACTIONAL_DSN: postgresql://pharma:pharma@postgres:5432/pharma
+      PHARMA_TIMESERIES_BACKEND: clickhouse
+      PHARMA_TIMESERIES_DSN: clickhouse://default@clickhouse:9000/pharma_ts
+      PHARMA_MQTT_HOST: mosquitto
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/app/data
+    command: >
+      run --days 7 --then-live --sink mqtt,jsonl_file
+    profiles: ["full"]
+
+volumes:
+  postgres-data:
+  clickhouse-data:

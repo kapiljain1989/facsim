@@ -1,0 +1,9 @@
+worker_roles: [OPERATOR]
+manager_role: SHIFT_LEAD
+technician_role: FITTER
+qc_analyst_role: LAB_TECH
+skill_levels: [TRAINEE, QUALIFIED]
+
+units:
+  - {id: U-MIX,  name: Syrup Mixing,  sequence: 1, process_stage: MIXING,  worker_count: 4, environment_sensitivity: 1.0}
+  - {id: U-FILL, name: Bottle Filling, sequence: 2, process_stage: FILLING, worker_count: 4, environment_sensitivity: 0.9}

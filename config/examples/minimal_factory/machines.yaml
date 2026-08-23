@@ -1,0 +1,82 @@
+equipment_classes:
+  # Inherits the profile.
+  - id: syrup_mixer
+    name: Syrup Mixing Vessel
+    sensor_profile: agitator
+    nominal_rate_per_hour: 900.0
+    stage_duration_min: 55.0
+    pm_interval_hours: 500.0
+    base_reject_rate: 0.003
+
+  # Inline only — no profile at all.
+  - id: bottle_filler
+    name: Rotary Bottle Filler
+    nominal_rate_per_hour: 5400.0
+    pm_interval_hours: 420.0
+    base_reject_rate: 0.006
+    sensors:
+      - tag: fill_volume_ml
+        unit: ml
+        baseline: 100.0
+        sigma: 0.55
+        rho: 0.86
+        drift_per_day: 0.05
+        drift_limit: 2.0
+        health_sensitivity: -0.02
+        hard_min: 0.0
+        hard_max: 250.0
+        warn_low: 97.5
+        warn_high: 102.5
+        alarm_low: 96.0
+        alarm_high: 104.0
+        process_parameter: true
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.0, sigma_mult: 0.0}
+          maintenance: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 0.995, sigma_mult: 2.4}
+      - tag: pump_pressure
+        unit: bar
+        baseline: 2.6
+        sigma: 0.08
+        rho: 0.91
+        drift_per_day: -0.006
+        drift_limit: 0.35
+        health_sensitivity: -0.26
+        hard_min: 0.0
+        hard_max: 9.0
+        warn_low: 1.9
+        alarm_low: 1.5
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.15, sigma_mult: 0.3}
+          maintenance: {mult: 0.0, sigma_mult: 0.0}
+          warning: {mult: 0.90, sigma_mult: 1.9}
+      - tag: motor_current
+        unit: A
+        baseline: 6.2
+        sigma: 0.24
+        rho: 0.93
+        drift_per_day: 0.010
+        drift_limit: 0.6
+        health_sensitivity: 0.19
+        hard_min: 0.0
+        hard_max: 22.0
+        warn_high: 9.5
+        alarm_high: 12.0
+        state_factors:
+          offline: {mult: 0.0, sigma_mult: 0.0}
+          idle: {mult: 0.09, sigma_mult: 0.4}
+          maintenance: {mult: 0.04, sigma_mult: 0.2}
+          warning: {mult: 1.09, sigma_mult: 1.9}
+      - tag: bottles_filled
+        unit: bottles
+        baseline: 0.0
+        derived_from: good_count
+        plc_area: COUNTER
+
+layout:
+  U-MIX:
+    - {equipment_class: syrup_mixer,  count: 3, id_prefix: MX, commissioned_from: 2020-01-01, commissioned_to: 2024-06-30}
+  U-FILL:
+    - {equipment_class: bottle_filler, count: 2, id_prefix: FL, commissioned_from: 2021-01-01, commissioned_to: 2024-12-31}

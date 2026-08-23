@@ -1,0 +1,343 @@
+# Quality control: parameters, limits, and the transfer functions that make a QC
+# result a CONSEQUENCE of process conditions rather than an independent draw (§17).
+#
+# Each `transfer` is a declarative polynomial:
+#     value = intercept + sum(coef * input**power)
+# Inputs may be process parameters (from products.yaml), other QC parameters
+# (evaluated in dependency order), or engine drivers such as machine_health.
+# Intercepts are chosen so that nominal inputs land exactly on target, which is
+# why a shifted setpoint or a degrading machine moves the result the right way.
+#
+# The causal chains of §19 are visible here:
+#   main_compression_force -> tablet_hardness -> disintegration_time -> dissolution
+#   inlet_temperature/drying_time -> moisture_content -> tablet_hardness
+#   blend_time -> blend_uniformity_rsd -> content_uniformity -> assay
+
+results: [PASS, FAIL, OOS, OOT]
+reject_on_final_failure: true
+
+parameters:
+
+  # ---- in-process ----------------------------------------------------------
+  - id: moisture_content
+    name: Loss on Drying
+    stage: DRYING
+    phase: IN_PROCESS
+    unit: '%'
+    target: 2.5
+    lower_limit: 1.5
+    upper_limit: 3.5
+    noise_sigma: 0.09
+    health_sensitivity: 0.10
+    sample_size: 3
+    transfer:
+      intercept: 6.90
+      terms:
+        - {input: inlet_temperature, coef: -0.055}   # hotter air -> drier granule
+        - {input: drying_time, coef: -0.022}
+      clip_min: 0.2
+
+  - id: granule_size
+    name: Granule Particle Size (D50)
+    stage: MILLING
+    phase: IN_PROCESS
+    unit: um
+    target: 240.0
+    lower_limit: 150.0
+    upper_limit: 350.0
+    noise_sigma: 4.0
+    health_sensitivity: 0.08
+    sample_size: 3
+    transfer:
+      intercept: -0.6
+      terms:
+        - {input: particle_size, coef: 0.94}
+        - {input: moisture_content, coef: 6.0}       # wetter granule mills coarser
+      clip_min: 20.0
+
+  - id: blend_uniformity_rsd
+    name: Blend Uniformity (RSD)
+    stage: BLENDING
+    phase: IN_PROCESS
+    unit: '%'
+    target: 2.4
+    lower_limit: 0.0
+    upper_limit: 5.0
+    noise_sigma: 0.16
+    health_sensitivity: 0.25
+    sample_size: 10
+    transfer:
+      intercept: 3.85
+      terms:
+        - {input: blend_time, coef: -0.085}          # longer blending -> lower RSD
+        - {input: rpm, coef: -0.030}
+        - {input: granule_size, coef: 0.0035}
+      clip_min: 0.3
+
+  - id: tablet_weight_qc
+    name: Tablet Average Weight
+    stage: COMPRESSION
+    phase: IN_PROCESS
+    unit: mg
+    target: 550.0
+    lower_limit: 533.5
+    upper_limit: 566.5
+    noise_sigma: 2.6
+    health_sensitivity: 0.012
+    sample_size: 20
+    transfer:
+      intercept: 0.0
+      terms:
+        - {input: tablet_weight, coef: 1.0}          # tracks the product setpoint
+        - {input: machine_health, coef: 4.0}
+      clip_min: 1.0
+
+  - id: tablet_hardness
+    name: Tablet Hardness
+    stage: COMPRESSION
+    phase: IN_PROCESS
+    unit: N
+    target: 84.0
+    lower_limit: 62.0
+    upper_limit: 112.0
+    noise_sigma: 2.0
+    health_sensitivity: 0.06
+    sample_size: 10
+    transfer:
+      intercept: 27.6
+      terms:
+        - {input: main_compression_force, coef: 4.6} # more force -> harder tablet
+        - {input: moisture_content, coef: -3.2}      # drier granule -> harder tablet
+      clip_min: 5.0
+
+  - id: tablet_thickness_qc
+    name: Tablet Thickness
+    stage: COMPRESSION
+    phase: IN_PROCESS
+    unit: mm
+    target: 4.35
+    lower_limit: 4.05
+    upper_limit: 4.65
+    noise_sigma: 0.026
+    sample_size: 10
+    transfer:
+      intercept: 3.092
+      terms:
+        - {input: main_compression_force, coef: -0.028}
+        - {input: tablet_weight, coef: 0.0030}
+      clip_min: 0.5
+
+  - id: friability
+    name: Friability
+    stage: COMPRESSION
+    phase: IN_PROCESS
+    unit: '%'
+    target: 0.35
+    lower_limit: 0.0
+    upper_limit: 1.0
+    noise_sigma: 0.045
+    sample_size: 1
+    transfer:
+      intercept: 0.728
+      terms:
+        - {input: tablet_hardness, coef: -0.0045}    # harder tablet -> less friable
+      clip_min: 0.0
+
+  - id: disintegration_time
+    name: Disintegration Time
+    stage: COMPRESSION
+    phase: IN_PROCESS
+    unit: min
+    target: 6.5
+    lower_limit: 0.0
+    upper_limit: 15.0
+    noise_sigma: 0.35
+    health_sensitivity: 0.05
+    sample_size: 6
+    transfer:
+      intercept: -5.77
+      terms:
+        - {input: tablet_hardness, coef: 0.135}      # harder tablet -> slower to break
+        - {input: coating_weight_gain, coef: 0.30}
+      clip_min: 0.5
+
+  - id: coating_weight_gain
+    name: Coating Weight Gain
+    stage: COATING
+    phase: IN_PROCESS
+    unit: '%'
+    target: 3.1
+    lower_limit: 2.0
+    upper_limit: 4.5
+    noise_sigma: 0.09
+    health_sensitivity: -0.15
+    sample_size: 5
+    transfer:
+      intercept: 1.276
+      terms:
+        - {input: spray_rate, coef: 0.021}
+        - {input: inlet_temperature, coef: -0.012}
+      clip_min: 0.1
+
+  - id: capsule_fill_weight_qc
+    name: Capsule Fill Weight
+    stage: CAPSULE_FILLING
+    phase: IN_PROCESS
+    unit: mg
+    target: 305.0
+    lower_limit: 290.0
+    upper_limit: 320.0
+    noise_sigma: 2.1
+    health_sensitivity: 0.015
+    sample_size: 20
+    transfer:
+      intercept: 0.0
+      terms:
+        - {input: fill_weight, coef: 1.0}
+        - {input: machine_health, coef: 3.0}
+      clip_min: 1.0
+
+  # ---- final release -------------------------------------------------------
+  - id: appearance
+    name: Visual Appearance Score
+    stage: COATING
+    phase: FINAL
+    unit: score
+    target: 96.0
+    lower_limit: 90.0
+    upper_limit: 100.0
+    noise_sigma: 0.8
+    sample_size: 20
+    transfer:
+      intercept: 89.18
+      terms:
+        - {input: coating_weight_gain, coef: 2.2}
+        - {input: machine_health, coef: -18.0}       # a sick machine looks it
+      clip_max: 100.0
+
+  - id: dissolution
+    name: Dissolution (Q at 30 min)
+    stage: COMPRESSION
+    phase: FINAL
+    unit: '%'
+    target: 92.0
+    lower_limit: 80.0
+    upper_limit: 105.0
+    noise_sigma: 1.6
+    sample_size: 6
+    transfer:
+      intercept: 107.435
+      terms:
+        - {input: disintegration_time, coef: -1.85}  # slower breakup -> less dissolved
+        - {input: coating_weight_gain, coef: -1.1}
+      clip_min: 5.0
+      clip_max: 100.0
+
+  # Capsules have no compression step, so their dissolution is driven by fill
+  # weight and blend uniformity rather than by tablet hardness. Modelling it as a
+  # separate parameter keeps each transfer function physically honest.
+  - id: capsule_dissolution
+    name: Dissolution (Q at 30 min, capsule)
+    stage: CAPSULE_FILLING
+    phase: FINAL
+    unit: '%'
+    target: 94.0
+    lower_limit: 80.0
+    upper_limit: 105.0
+    noise_sigma: 1.7
+    sample_size: 6
+    transfer:
+      intercept: 115.9
+      terms:
+        - {input: capsule_fill_weight_qc, coef: -0.06}
+        - {input: blend_uniformity_rsd, coef: -1.5}
+      clip_min: 5.0
+      clip_max: 100.0
+
+  - id: content_uniformity
+    name: Content Uniformity (RSD)
+    stage: BLENDING
+    phase: FINAL
+    unit: '%'
+    target: 2.8
+    lower_limit: 0.0
+    upper_limit: 6.0
+    noise_sigma: 0.2
+    health_sensitivity: 0.10
+    sample_size: 10
+    transfer:
+      intercept: 0.232
+      terms:
+        - {input: blend_uniformity_rsd, coef: 0.95}
+        - {input: material_variability, coef: 12.0}
+      clip_min: 0.3
+
+  - id: assay
+    name: Assay (% Label Claim)
+    stage: BLENDING
+    phase: FINAL
+    unit: '%'
+    target: 100.0
+    lower_limit: 95.0
+    upper_limit: 105.0
+    noise_sigma: 0.55
+    sample_size: 3
+    transfer:
+      intercept: 75.33
+      terms:
+        - {input: content_uniformity, coef: -0.35}
+        - {input: dispensed_weight, coef: 1.05}      # dispensing error carries through
+        - {input: material_variability, coef: -25.0}
+      clip_min: 50.0
+
+  - id: impurities
+    name: Total Related Substances
+    stage: DRYING
+    phase: FINAL
+    unit: '%'
+    target: 0.22
+    lower_limit: 0.0
+    upper_limit: 0.50
+    noise_sigma: 0.022
+    health_sensitivity: 0.08
+    sample_size: 2
+    transfer:
+      intercept: -0.1104
+      terms:
+        - {input: inlet_temperature, coef: 0.0042}   # thermal stress -> degradants
+        - {input: moisture_content, coef: 0.028}
+      clip_min: 0.0
+
+  - id: water_content
+    name: Water Content (KF)
+    stage: DRYING
+    phase: FINAL
+    unit: '%'
+    target: 2.5
+    lower_limit: 1.5
+    upper_limit: 3.5
+    noise_sigma: 0.07
+    sample_size: 2
+    transfer:
+      intercept: 0.05
+      terms:
+        - {input: moisture_content, coef: 0.98}
+      clip_min: 0.1
+
+  - id: microbial_limit
+    name: Total Aerobic Microbial Count
+    stage: STERILIZATION
+    phase: FINAL
+    unit: CFU/g
+    target: 12.0
+    lower_limit: 0.0
+    upper_limit: 100.0
+    noise_sigma: 3.5
+    health_sensitivity: 0.30
+    sample_size: 2
+    transfer:
+      intercept: 21.6
+      terms:
+        - {input: cycle_time, coef: -0.55}           # longer cycle -> lower count
+        - {input: ambient_humidity_pct, coef: 0.30}
+      clip_min: 0.0

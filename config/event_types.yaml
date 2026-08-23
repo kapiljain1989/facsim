@@ -1,0 +1,247 @@
+# Event vocabulary. The event bus validates every published event against the
+# declaration below, and a startup self-check verifies that every event type the
+# engine emits appears here — so a typo fails immediately, not at hour 300.
+
+severities: [INFO, MINOR, MAJOR, CRITICAL]
+
+event_types:
+  # ---- simulation lifecycle -------------------------------------------------
+  - id: SIMULATION_STARTED
+    category: LIFECYCLE
+    description: A simulation run began.
+    required_fields: [run_id, seed, config_fingerprint]
+
+  - id: SIMULATION_STOPPED
+    category: LIFECYCLE
+    description: A simulation run ended.
+    required_fields: [run_id, simulated_hours]
+
+  # ---- shifts and people ---------------------------------------------------
+  - id: SHIFT_STARTED
+    category: SHIFT
+    required_fields: [shift_code, shift_instance_id]
+
+  - id: SHIFT_ENDED
+    category: SHIFT
+    required_fields: [shift_code, shift_instance_id]
+
+  - id: EMPLOYEE_CLOCK_IN
+    category: EMPLOYEE
+    required_fields: [shift_instance_id]
+
+  - id: EMPLOYEE_CLOCK_OUT
+    category: EMPLOYEE
+    required_fields: [shift_instance_id]
+
+  - id: EMPLOYEE_ABSENT
+    category: EMPLOYEE
+    default_severity: MINOR
+    required_fields: [shift_instance_id]
+
+  - id: BREAK_START
+    category: EMPLOYEE
+    required_fields: [label]
+    stream: false
+
+  - id: BREAK_END
+    category: EMPLOYEE
+    required_fields: [label]
+    stream: false
+
+  - id: OVERTIME_STARTED
+    category: EMPLOYEE
+    required_fields: [minutes]
+
+  - id: MACHINE_ASSIGNED
+    category: EMPLOYEE
+    required_fields: [shift_instance_id]
+
+  # ---- machine operation ---------------------------------------------------
+  - id: MACHINE_STATE_CHANGED
+    category: MACHINE
+    required_fields: [from_state, to_state, reason]
+
+  - id: MACHINE_STARTED
+    category: MACHINE
+    required_fields: [reason]
+
+  - id: MACHINE_STOPPED
+    category: MACHINE
+    required_fields: [reason]
+
+  - id: SETUP_PERFORMED
+    category: MACHINE
+    required_fields: [duration_min, setup_error]
+
+  - id: CLEANING_PERFORMED
+    category: MACHINE
+    required_fields: [duration_min]
+
+  - id: BATCH_CHANGEOVER
+    category: MACHINE
+    required_fields: [duration_min]
+
+  - id: MATERIAL_CHANGE
+    category: MACHINE
+    required_fields: [material_id]
+
+  - id: MACHINE_WARNING
+    category: MACHINE
+    default_severity: MINOR
+    required_fields: [failure_mode, degradation]
+
+  - id: MACHINE_FAILURE
+    category: MACHINE
+    default_severity: MAJOR
+    required_fields: [failure_id, failure_mode, category]
+
+  - id: PRODUCTION_STOPPED
+    category: PRODUCTION
+    default_severity: MAJOR
+    required_fields: [reason]
+
+  - id: PRODUCTION_RESUMED
+    category: PRODUCTION
+    required_fields: [reason]
+
+  - id: SENSOR_ANOMALY
+    category: SENSOR
+    default_severity: MINOR
+    required_fields: [sensor_id, tag, value, kind]
+
+  - id: SENSOR_ALARM
+    category: SENSOR
+    default_severity: MAJOR
+    required_fields: [sensor_id, tag, value, limit, alarm_code]
+
+  - id: SENSOR_MALFUNCTION
+    category: SENSOR
+    default_severity: MINOR
+    required_fields: [sensor_id, tag, kind]
+
+  - id: DEGRADATION_STARTED
+    category: MACHINE
+    description: A failure mode began incubating; the precursor window opens here.
+    required_fields: [failure_mode, expected_fault_at]
+    stream: false
+
+  - id: DEGRADATION_AVERTED
+    category: MACHINE
+    description: Maintenance intervened before the scheduled fault.
+    required_fields: [failure_mode]
+    stream: false
+
+  # ---- production and batches ---------------------------------------------
+  - id: PRODUCTION_ORDER_CREATED
+    category: PRODUCTION
+    required_fields: [order_id, product_id, quantity]
+
+  - id: BATCH_STARTED
+    category: BATCH
+    required_fields: [product_id, order_id]
+
+  - id: BATCH_STAGE_STARTED
+    category: BATCH
+    required_fields: [stage, machine_ids]
+
+  - id: BATCH_STAGE_COMPLETED
+    category: BATCH
+    required_fields: [stage, result]
+
+  - id: BATCH_COMPLETED
+    category: BATCH
+    required_fields: [product_id, good_quantity, reject_quantity]
+
+  - id: BATCH_DISPOSITION
+    category: BATCH
+    required_fields: [disposition]
+
+  - id: PRODUCTION_RECORDED
+    category: PRODUCTION
+    required_fields: [shift_instance_id, good_quantity, reject_quantity]
+    stream: false
+
+  # ---- quality -------------------------------------------------------------
+  - id: QC_SAMPLE_COLLECTION
+    category: QC
+    required_fields: [stage, sample_count]
+
+  - id: QC_TEST_STARTED
+    category: QC
+    required_fields: [phase, parameter_count]
+
+  - id: QC_TEST_COMPLETED
+    category: QC
+    required_fields: [phase, passed, failed]
+
+  - id: QC_FAILED
+    category: QC
+    default_severity: MAJOR
+    required_fields: [parameter, actual_value, result]
+
+  # ---- maintenance ---------------------------------------------------------
+  - id: MAINTENANCE_SCHEDULED
+    category: MAINTENANCE
+    required_fields: [maintenance_id, maintenance_type, scheduled_time]
+
+  - id: MAINTENANCE_STARTED
+    category: MAINTENANCE
+    required_fields: [maintenance_id, maintenance_type]
+
+  - id: MAINTENANCE_COMPLETED
+    category: MAINTENANCE
+    required_fields: [maintenance_id, maintenance_type, duration_hours]
+
+  - id: MAINTENANCE_DEFERRED
+    category: MAINTENANCE
+    default_severity: MINOR
+    required_fields: [maintenance_id, deferred_hours]
+
+  - id: MAINTENANCE_REQUEST
+    category: MAINTENANCE
+    required_fields: [reason]
+
+  # ---- quality management --------------------------------------------------
+  - id: DEVIATION_CREATED
+    category: QUALITY_MANAGEMENT
+    default_severity: MAJOR
+    required_fields: [deviation_id, title, severity]
+
+  - id: DEVIATION_CLOSED
+    category: QUALITY_MANAGEMENT
+    required_fields: [deviation_id]
+
+  - id: RCA_STARTED
+    category: QUALITY_MANAGEMENT
+    required_fields: [rca_id, deviation_id]
+
+  - id: RCA_COMPLETED
+    category: QUALITY_MANAGEMENT
+    required_fields: [rca_id, root_cause, confidence]
+
+  - id: CAPA_CREATED
+    category: QUALITY_MANAGEMENT
+    required_fields: [capa_id, rca_id, corrective_action]
+
+  - id: CAPA_CLOSED
+    category: QUALITY_MANAGEMENT
+    required_fields: [capa_id, verified_batches]
+
+  # ---- environment and scenarios ------------------------------------------
+  - id: AMBIENT_EXCURSION_STARTED
+    category: ENVIRONMENT
+    default_severity: MINOR
+    required_fields: [kind, delta]
+
+  - id: AMBIENT_EXCURSION_ENDED
+    category: ENVIRONMENT
+    required_fields: [kind]
+
+  - id: MATERIAL_SHORTAGE
+    category: MATERIAL
+    default_severity: MAJOR
+    required_fields: [material_id]
+
+  - id: SCENARIO_ACTION_APPLIED
+    category: LIFECYCLE
+    required_fields: [scenario_id, action_type]

@@ -1,0 +1,12 @@
+# Runtime dependencies. Kept deliberately small: the default configuration
+# (SQLite + Parquet + JSONL) needs nothing beyond these four.
+pydantic>=2.7
+PyYAML>=6.0
+pyarrow>=15.0
+paho-mqtt>=2.0
+
+# Optional backends. Install via the extras rather than uncommenting, so the
+# default install stays lean:
+#   uv pip install -e ".[dev,postgres,clickhouse]"
+# psycopg[binary]>=3.1      # PostgreSQL / TimescaleDB
+# clickhouse-driver>=0.2.7  # ClickHouse

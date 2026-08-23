@@ -1,0 +1,31 @@
+# A five-state model with completely different names, and no cleaning, changeover
+# or starting state at all. The engine reads the ROLES below, so production, OEE,
+# downtime, failures and QC all keep working.
+states:
+  - {id: DOWN,      description: Powered down,            production_rate_factor: 0.0, energy_factor: 0.03}
+  - {id: READY,     description: Available and waiting,   production_rate_factor: 0.0, energy_factor: 0.18}
+  - {id: PRODUCING, description: Making product,          production_rate_factor: 1.0, energy_factor: 1.0}
+  - {id: DEGRADED,  description: "Making product, impaired", production_rate_factor: 0.78, reject_rate_add: 0.03, energy_factor: 1.08}
+  - {id: SERVICE,   description: Stopped for service,     production_rate_factor: 0.0, energy_factor: 0.12}
+
+transitions:
+  DOWN:      [READY, SERVICE]
+  READY:     [PRODUCING, SERVICE, DOWN]
+  PRODUCING: [DEGRADED, READY, SERVICE]
+  DEGRADED:  [PRODUCING, READY, SERVICE]
+  SERVICE:   [READY, DOWN]
+
+roles:
+  initial: DOWN
+  productive: [PRODUCING, DEGRADED]
+  downtime: [SERVICE]
+  idle: [READY]
+  warning: [DEGRADED]
+  fault: [SERVICE]
+  maintenance: [SERVICE]
+  cleaning: []          # this plant has no distinct cleaning state
+  changeover: []
+  offline: [DOWN]
+  starting: []          # nor a ramp-up state
+  requires_operator: [PRODUCING, DEGRADED]
+  planned_stop: [DOWN]

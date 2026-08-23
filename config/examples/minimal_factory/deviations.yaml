@@ -1,0 +1,4 @@
+statuses: [OPEN, INVESTIGATION, CAPA_PENDING, CLOSED]
+rules:
+  - {id: DEV-FAIL, trigger_event: MACHINE_FAILURE, severity: MAJOR, title: Unplanned equipment failure, requires_rca: true, requires_capa: true}
+  - {id: DEV-QC, trigger_event: QC_FAILED, severity: MAJOR, title: QC result outside specification, requires_rca: true, requires_capa: true}

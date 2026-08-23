@@ -1,0 +1,22 @@
+# A deliberately different factory: two units, five machines, its own state model.
+# Used by the test suite to prove that changing the schema needs no code change.
+plant_id: LIQ-01
+name: Riverside Liquids — Oral Syrup Line
+location: Nashik, India
+timezone: Asia/Kolkata
+plant_manager_name: S. Kulkarni
+simulation:
+  seed: 7
+  start_time: 2026-03-01T06:00:00
+  sensor_sample_interval_s: 120.0
+  live_sensor_sample_interval_s: 10.0
+  hazard_evaluation_interval_min: 60.0
+  production_tick_min: 10.0
+  label_interval_min: 60.0
+  rca_lookback_hours: 48.0
+  rca_investigation_delay_hours: 2.0
+ambient:
+  temperature_c: 26.0
+  temperature_diurnal_amplitude_c: 3.5
+  humidity_pct: 58.0
+  excursion_probability_per_day: 0.05
