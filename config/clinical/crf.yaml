@@ -1,0 +1,194 @@
+# The casebook, the edit checks, and how queries behave — the EDC layer.
+#
+# `scope` says how often a form is completed, and it is resolved against data
+# that already exists: PER_ASSESSMENT forms follow the tumour assessments the
+# lesion model produced, PER_CYCLE forms follow dosing cycles. The casebook wraps
+# the study rather than inventing a parallel one.
+#
+# Edit checks are declarative so the linter can verify that every item they name
+# exists, and so a check is a config edit rather than a code change. Each one that
+# fires raises a system query against the item it names.
+
+forms:
+  - form_id: DM
+    name: Demographics
+    scope: ONCE
+    sdtm_domain: DM
+    items:
+      - {item_id: AGE, label: Age at consent, type: INTEGER, unit: YEARS, sdtm: AGE}
+      - {item_id: SEX, label: Sex, type: CODED, codelist: SEX, sdtm: SEX}
+      - {item_id: RACE, label: Race, type: CODED, codelist: RACE, sdtm: RACE}
+      - {item_id: ICDAT, label: Informed consent date, type: DATE, sdtm: RFICDTC}
+
+  - form_id: EL
+    name: Eligibility
+    scope: ONCE
+    items:
+      - {item_id: ECOG, label: ECOG performance status, type: CODED, codelist: ECOG}
+      - {item_id: G12CRES, label: KRAS G12C result, type: CODED, codelist: BIOMARKER}
+      - {item_id: PDL1TPS, label: PD-L1 tumour proportion score, type: INTEGER, unit: PERCENT}
+      - {item_id: PRIORTX, label: Prior systemic therapy for advanced disease, type: CODED, codelist: YESNO}
+      - {item_id: INCALL, label: All inclusion criteria met, type: CODED, codelist: YESNO}
+      - {item_id: EXCNONE, label: No exclusion criteria met, type: CODED, codelist: YESNO}
+
+  - form_id: VS
+    name: Vital Signs
+    scope: PER_VISIT
+    sdtm_domain: VS
+    items:
+      - {item_id: VSDAT, label: Assessment date, type: DATE}
+      - {item_id: SYSBP, label: Systolic blood pressure, type: NUMBER, unit: mmHg, sdtm: VSORRES}
+      - {item_id: DIABP, label: Diastolic blood pressure, type: NUMBER, unit: mmHg, sdtm: VSORRES}
+      - {item_id: PULSE, label: Pulse rate, type: NUMBER, unit: beats/min, sdtm: VSORRES}
+      - {item_id: WEIGHT, label: Weight, type: NUMBER, unit: kg, sdtm: VSORRES}
+
+  - form_id: LB
+    name: Laboratory
+    scope: PER_VISIT
+    sdtm_domain: LB
+    items:
+      - {item_id: LBDAT, label: Sample date, type: DATE}
+      - {item_id: HGB, label: Haemoglobin, type: NUMBER, unit: g/L, sdtm: LBORRES}
+      - {item_id: NEUT, label: Neutrophils, type: NUMBER, unit: 10^9/L, sdtm: LBORRES}
+      - {item_id: PLAT, label: Platelets, type: NUMBER, unit: 10^9/L, sdtm: LBORRES}
+      - {item_id: ALT, label: Alanine aminotransferase, type: NUMBER, unit: U/L, sdtm: LBORRES}
+      - {item_id: CREAT, label: Creatinine, type: NUMBER, unit: umol/L, sdtm: LBORRES}
+
+  - form_id: TA
+    name: Tumour Assessment
+    scope: PER_ASSESSMENT
+    sdtm_domain: TR
+    items:
+      - {item_id: TADAT, label: Scan date, type: DATE}
+      - {item_id: TAMETH, label: Imaging method, type: CODED, codelist: IMAGING}
+      - {item_id: SUMDIAM, label: Sum of target lesion diameters, type: NUMBER, unit: mm}
+      - {item_id: NEWLES, label: New lesion present, type: CODED, codelist: YESNO}
+      - {item_id: NTRESP, label: Non-target response, type: CODED, codelist: NONTARGET}
+      - {item_id: OVRLRESP, label: Overall response, type: CODED, codelist: RECIST}
+
+  - form_id: EX
+    name: Study Drug Administration
+    scope: PER_CYCLE
+    sdtm_domain: EX
+    items:
+      - {item_id: EXSTDAT, label: Cycle start date, type: DATE, sdtm: EXSTDTC}
+      - {item_id: EXDOSE, label: Nelvorasib dose, type: NUMBER, unit: mg, sdtm: EXDOSE}
+      - {item_id: EXADJ, label: Dose adjusted this cycle, type: CODED, codelist: YESNO}
+      - {item_id: KITNO, label: Kit number dispensed, type: TEXT}
+
+  - form_id: DS
+    name: Disposition
+    scope: ONCE
+    sdtm_domain: DS
+    items:
+      - {item_id: DSDAT, label: End of treatment date, type: DATE, sdtm: DSSTDTC}
+      - {item_id: DSREAS, label: Reason for discontinuation, type: CODED, codelist: DISCREAS}
+
+codelists:
+  SEX: [M, F]
+  RACE: [WHITE, ASIAN, BLACK OR AFRICAN AMERICAN, OTHER, NOT REPORTED]
+  ECOG: ["0", "1", "2"]
+  BIOMARKER: [POSITIVE, NEGATIVE, INDETERMINATE]
+  YESNO: [Y, N]
+  IMAGING: [CT, MRI, "CT AND MRI"]
+  NONTARGET: [CR, NON_CR_NON_PD, PD, NE, ABSENT]
+  RECIST: [CR, PR, SD, PD, NE]
+  DISCREAS: [DISEASE PROGRESSION, ADVERSE EVENT, WITHDRAWAL BY SUBJECT, DEATH, PHYSICIAN DECISION, LOST TO FOLLOW-UP]
+
+# Declarative edit checks. `kind` decides which fields are read.
+edit_checks:
+  - {check_id: EC001, form_id: EL, item_id: ECOG, kind: RANGE, low: 0, high: 1, severity: MAJOR,
+     text: "ECOG performance status must be 0 or 1 per inclusion criteria. Please confirm."}
+  - {check_id: EC002, form_id: EL, item_id: G12CRES, kind: EXPECTED_VALUE, expected: POSITIVE, severity: CRITICAL,
+     text: "KRAS G12C must be POSITIVE for eligibility. Please confirm the central laboratory report."}
+  - {check_id: EC003, form_id: EL, item_id: PRIORTX, kind: EXPECTED_VALUE, expected: N, severity: CRITICAL,
+     text: "Prior systemic therapy for advanced disease is exclusionary. Please clarify."}
+  - {check_id: EC004, form_id: EL, item_id: PDL1TPS, kind: RANGE, low: 0, high: 100, severity: MINOR,
+     text: "PD-L1 TPS must be between 0 and 100%."}
+  - {check_id: EC005, form_id: VS, item_id: SYSBP, kind: RANGE, low: 70, high: 200, severity: MINOR,
+     text: "Systolic blood pressure is outside the expected range. Please verify against source."}
+  - {check_id: EC006, form_id: VS, item_id: PULSE, kind: RANGE, low: 40, high: 140, severity: MINOR,
+     text: "Pulse rate is outside the expected range. Please verify against source."}
+  - {check_id: EC007, form_id: VS, item_id: WEIGHT, kind: RANGE, low: 35, high: 160, severity: MINOR,
+     text: "Weight is outside the expected range. Please verify."}
+  - {check_id: EC008, form_id: LB, item_id: NEUT, kind: RANGE, low: 0.1, high: 20.0, severity: MAJOR,
+     text: "Neutrophil count is outside the expected range. Please verify and report any adverse event."}
+  - {check_id: EC009, form_id: LB, item_id: ALT, kind: RANGE, low: 5, high: 400, severity: MAJOR,
+     text: "ALT is outside the expected range. Please verify and confirm whether an adverse event applies."}
+  - {check_id: EC010, form_id: LB, item_id: PLAT, kind: RANGE, low: 20, high: 600, severity: MAJOR,
+     text: "Platelet count is outside the expected range. Please verify."}
+  - {check_id: EC011, form_id: LB, item_id: HGB, kind: RANGE, low: 60, high: 190, severity: MAJOR,
+     text: "Haemoglobin is outside the expected range. Please verify."}
+  - {check_id: EC012, form_id: TA, item_id: SUMDIAM, kind: RANGE, low: 0, high: 500, severity: MINOR,
+     text: "Sum of diameters is outside the expected range. Please verify the measurements."}
+  # The check that only exists because response is computed rather than typed: if
+  # the sum recorded on the form does not reproduce the response recorded on it,
+  # one of the two is wrong.
+  - {check_id: EC013, form_id: TA, item_id: OVRLRESP, kind: DERIVATION_MISMATCH, severity: MAJOR,
+     text: "Overall response is not consistent with the recorded sum of diameters and nadir. Please review."}
+  - {check_id: EC014, form_id: TA, item_id: TADAT, kind: DATE_ORDER, before: ICDAT, severity: MAJOR,
+     text: "Scan date precedes the informed consent date. Please correct."}
+  - {check_id: EC015, form_id: EX, item_id: EXDOSE, kind: RANGE, low: 0, high: 240, severity: MAJOR,
+     text: "Dose exceeds the maximum permitted by the protocol. Please verify."}
+  - {check_id: EC016, form_id: EX, item_id: KITNO, kind: REQUIRED, severity: MAJOR,
+     text: "Kit number is required for drug accountability. Please complete."}
+  - {check_id: EC017, form_id: DS, item_id: DSREAS, kind: REQUIRED, severity: MAJOR,
+     text: "Reason for discontinuation is required. Please complete."}
+  - {check_id: EC018, form_id: DM, item_id: AGE, kind: RANGE, low: 18, high: 95, severity: MAJOR,
+     text: "Age is outside the eligible range. Please verify the date of birth."}
+
+queries:
+  # Manual queries raised on review, on top of whatever the edit checks fire.
+  data_management_rate_per_form: 0.035
+  monitor_rate_per_form: 0.022
+  # A query answered badly gets re-asked. This is the single most common thing
+  # missing from synthetic query data, and the reason real query ageing looks the
+  # way it does.
+  requery_probability: 0.19
+  max_requeries: 2
+  # Days from raising a query to the site seeing it.
+  notification_days: {mean: 1.0, sd: 0.5}
+  # Days from the site answering to data management closing it.
+  closure_days: {mean: 3.5, sd: 2.0}
+
+# Where each item's value comes from. Declared rather than generated in code, so
+# a new item is a config edit. FROM_STUDY reads something the study already
+# computed -- the tumour assessment, the dosing record -- which is what keeps the
+# case report form and the SDTM datasets telling the same story rather than two
+# consistent-looking but unrelated ones.
+value_sources:
+  AGE: {kind: NORMAL, mean: 64.5, sd: 9.0, minimum: 34, maximum: 88, decimals: 0}
+  SEX: {kind: WEIGHTED, weights: {M: 0.57, F: 0.43}}
+  RACE: {kind: WEIGHTED, weights: {WHITE: 0.74, ASIAN: 0.15, BLACK OR AFRICAN AMERICAN: 0.06, OTHER: 0.03, NOT REPORTED: 0.02}}
+  ICDAT: {kind: FROM_STUDY, field: CONSENT_DATE}
+  ECOG: {kind: WEIGHTED, weights: {"0": 0.42, "1": 0.58}}
+  G12CRES: {kind: CONSTANT, value: POSITIVE}
+  PDL1TPS: {kind: NORMAL, mean: 28.0, sd: 26.0, minimum: 0, maximum: 100, decimals: 0}
+  PRIORTX: {kind: CONSTANT, value: N}
+  INCALL: {kind: CONSTANT, value: Y}
+  EXCNONE: {kind: CONSTANT, value: Y}
+  VSDAT: {kind: FROM_STUDY, field: VISIT_DATE}
+  SYSBP: {kind: NORMAL, mean: 132.0, sd: 15.0, minimum: 82, maximum: 195, decimals: 0}
+  DIABP: {kind: NORMAL, mean: 78.0, sd: 9.0, minimum: 48, maximum: 112, decimals: 0}
+  PULSE: {kind: NORMAL, mean: 76.0, sd: 11.0, minimum: 44, maximum: 132, decimals: 0}
+  WEIGHT: {kind: NORMAL, mean: 71.0, sd: 14.0, minimum: 38, maximum: 148, decimals: 1}
+  LBDAT: {kind: FROM_STUDY, field: VISIT_DATE}
+  # Chemotherapy suppresses counts, so these sit low and occasionally breach the
+  # edit-check range, which is what generates a laboratory query.
+  HGB: {kind: NORMAL, mean: 116.0, sd: 16.0, minimum: 58, maximum: 172, decimals: 0}
+  NEUT: {kind: NORMAL, mean: 3.4, sd: 1.6, minimum: 0.2, maximum: 14.0, decimals: 2}
+  PLAT: {kind: NORMAL, mean: 215.0, sd: 72.0, minimum: 18, maximum: 520, decimals: 0}
+  ALT: {kind: NORMAL, mean: 32.0, sd: 24.0, minimum: 6, maximum: 420, decimals: 0}
+  CREAT: {kind: NORMAL, mean: 78.0, sd: 19.0, minimum: 38, maximum: 190, decimals: 0}
+  TADAT: {kind: FROM_STUDY, field: ASSESSMENT_DATE}
+  TAMETH: {kind: WEIGHTED, weights: {CT: 0.86, MRI: 0.05, "CT AND MRI": 0.09}}
+  SUMDIAM: {kind: FROM_STUDY, field: SUM_OF_DIAMETERS}
+  NEWLES: {kind: FROM_STUDY, field: NEW_LESION}
+  NTRESP: {kind: FROM_STUDY, field: NON_TARGET_RESPONSE}
+  OVRLRESP: {kind: FROM_STUDY, field: OVERALL_RESPONSE}
+  EXSTDAT: {kind: FROM_STUDY, field: CYCLE_DATE}
+  EXDOSE: {kind: FROM_STUDY, field: DOSE}
+  EXADJ: {kind: FROM_STUDY, field: DOSE_ADJUSTED}
+  KITNO: {kind: FROM_STUDY, field: KIT_NUMBER}
+  DSDAT: {kind: FROM_STUDY, field: END_OF_TREATMENT_DATE}
+  DSREAS: {kind: FROM_STUDY, field: DISCONTINUATION_REASON}

@@ -23,7 +23,13 @@ from typing import Any, Iterable
 from pharma_sim.clinical.loader import load_clinical_config
 from pharma_sim.clinical.study import StudyOutput, run_study
 
-_OPERATIONAL = ("subjects", "tu", "tr", "rs", "adtte")
+#: Written as CSV, grouped by the system they would come out of.
+_CTMS = ("sites", "site_milestones", "monitoring_visits", "findings", "action_items",
+         "deviations")
+_EDC = ("subjects", "forms", "item_data", "queries", "query_events", "item_audit", "sdv")
+_SDTM = ("tu", "tr", "rs", "adtte")
+_LOCK = ("reconciliations", "lock_events")
+_OPERATIONAL = _CTMS + _EDC + _SDTM + _LOCK
 
 _README = """# {study_id} clinical dataset
 
@@ -47,7 +53,20 @@ two opinions about every patient.
 
 | File | Rows | What it is |
 |---|---|---|
-| `subjects.csv` | {n_subjects} | One row per patient: arm and randomisation date |
+| `sites.csv` | {n_sites} | The six hospitals, their performance profile, and when each opened |
+| `site_milestones.csv` | {n_milestones} | Every step from feasibility to first patient, per site |
+| `subjects.csv` | {n_subjects} | One row per patient: site, arm and randomisation date |
+| `forms.csv` | {n_forms} | Every case report form completed, and how late it was entered |
+| `item_data.csv` | {n_items} | Every individual value recorded on those forms |
+| `queries.csv` | {n_queries} | Every question raised about the data, and how it was resolved |
+| `query_events.csv` | {n_query_events} | The lifecycle of each query, including re-queries |
+| `item_audit.csv` | {n_audit} | Values that were corrected: what they were, and why they changed |
+| `sdv.csv` | {n_sdv} | Which values a monitor checked against the hospital records |
+| `monitoring_visits.csv` | {n_visits} | Monitoring visits, including any triggered by a site's own error rate |
+| `findings.csv` / `action_items.csv` | {n_findings} / {n_actions} | What monitors found and whether it was fixed on time |
+| `deviations.csv` | {n_deviations} | Where the protocol was not followed |
+| `tmf_documents.csv` | {n_tmf} | The regulatory filing cabinet: every document expected, filed or missing |
+| `reconciliations.csv` / `lock_events.csv` | {n_recs} / {n_locks} | Closing the database down for analysis |
 | `tu.csv` | {n_tu} | Which tumours each reader chose to follow (SDTM Tumour Identification) |
 | `tr.csv` | {n_tr} | Every measurement of every tumour at every scan (SDTM Tumour Results) |
 | `rs.csv` | {n_rs} | The response derived at each scan, plus each patient's best response (SDTM Disease Response) |
@@ -85,8 +104,32 @@ two opinions about every patient.
 | `EVNTDESC` | Why the observation ended — the event, or the reason for censoring |
 | `EVAL` | Which reader's assessment this survival time is based on |
 
-Join everything on `USUBJID`. Within a patient, join `tr.csv` to `rs.csv` on
-`USUBJID` + `VISITNUM` + `TREVALID`/`RSEVALID`.
+Join everything on `USUBJID` (patient) and `SITEID` / `site_id` (hospital).
+Within a patient, join `tr.csv` to `rs.csv` on `USUBJID` + `VISITNUM` +
+`TREVALID`/`RSEVALID`. The EDC tables use lower-case column names and the
+SDTM/ADaM tables use upper-case, which is the convention in both worlds.
+
+## The operational story the data tells
+
+Worth knowing, because these are consequences rather than settings:
+
+- **One hospital is visibly worse than the others.** Site `DE-003` produces
+  roughly three times the queries per form of the study average and takes three
+  weeks to enter data. That is why it has a `FOR_CAUSE` monitoring visit in
+  `monitoring_visits.csv` that no other site has, and 1.3 protocol deviations per
+  patient against about 0.4 elsewhere.
+- **A slow contract cost the study accrual.** Look at `site_milestones.csv` for
+  `ES-002`: its contract took five months, and nothing after it could start. Its
+  patient count reflects the months it was closed, not how well it recruits.
+- **The filing cabinet is {tmf_complete:.0f}% complete, and the gaps are
+  nameable.** Missing site staff CVs, financial disclosure forms, and drug
+  accountability logs — which is exactly where a real trial master file loses its
+  percentage. `{tmf_timely:.0f}%` of what was filed arrived within the target
+  window.
+- **Queries get asked twice.** `query_events.csv` shows a `RE_QUERIED` state: the
+  site answered, the answer did not address the question, and it went back. This
+  is what makes query ageing look the way it does — median {query_median:.0f}
+  days but a long tail.
 
 ## Things worth knowing before you use it
 
@@ -142,6 +185,16 @@ repository.
 """
 
 
+def _median(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return float(ordered[middle])
+    return (ordered[middle - 1] + ordered[middle]) / 2.0
+
+
 def _write_csv(path: Path, rows: Iterable[dict[str, Any]]) -> int:
     rows = list(rows)
     if not rows:
@@ -174,6 +227,24 @@ def _write_readme(path: Path, out: StudyOutput, config, written: dict[str, int],
             subjects=len(out.subjects),
             arms=len(config.protocol.arms),
             cutoff=config.protocol.analysis.cutoff_weeks_from_fsi,
+            n_sites=f"{written.get('sites', 0):,}",
+            n_milestones=f"{written.get('site_milestones', 0):,}",
+            n_forms=f"{written.get('forms', 0):,}",
+            n_items=f"{written.get('item_data', 0):,}",
+            n_queries=f"{written.get('queries', 0):,}",
+            n_query_events=f"{written.get('query_events', 0):,}",
+            n_audit=f"{written.get('item_audit', 0):,}",
+            n_sdv=f"{written.get('sdv', 0):,}",
+            n_visits=f"{written.get('monitoring_visits', 0):,}",
+            n_findings=f"{written.get('findings', 0):,}",
+            n_actions=f"{written.get('action_items', 0):,}",
+            n_deviations=f"{written.get('deviations', 0):,}",
+            n_tmf=f"{written.get('tmf_documents', 0):,}",
+            n_recs=f"{written.get('reconciliations', 0):,}",
+            n_locks=f"{written.get('lock_events', 0):,}",
+            tmf_complete=out.tmf_completeness,
+            tmf_timely=out.tmf_timeliness,
+            query_median=_median([row["age_days"] for row in out.queries]),
             n_subjects=f"{written.get('subjects', 0):,}",
             n_tu=f"{written.get('tu', 0):,}",
             n_tr=f"{written.get('tr', 0):,}",
@@ -202,7 +273,10 @@ def main() -> int:
     print(out.summary())
 
     root = Path(args.output)
-    written = {name: _write_csv(root / f"{name}.csv", getattr(out, name)) for name in _OPERATIONAL}
+    written = {
+        name: _write_csv(root / f"{name}.csv", getattr(out, name))
+        for name in (*_OPERATIONAL, "tmf_documents")
+    }
     # Ground truth to its own directory, so globbing the operational data cannot
     # pick it up.
     written["truth"] = _write_csv(root / "truth" / "tumour_parameters.csv", out.truth)

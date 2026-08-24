@@ -16,6 +16,19 @@ __all__ = [
     "ClinicalConfig",
     "ProtocolConfig",
     "Arm",
+    "SitesConfig",
+    "Site",
+    "Country",
+    "Archetype",
+    "Milestone",
+    "CrfConfig",
+    "Form",
+    "Item",
+    "EditCheck",
+    "ValueSource",
+    "MonitoringConfig",
+    "TmfConfig",
+    "Artifact",
     "TumourConfig",
     "RecistConfig",
     "ReaderConfig",
@@ -161,7 +174,7 @@ class Endpoints(Strict):
 
 class Enrolment(Strict):
     first_subject_in: date
-    accrual_weeks: NonNegative
+    planned_accrual_weeks: NonNegative
 
 
 class Analysis(Strict):
@@ -188,9 +201,258 @@ class ProtocolConfig(Strict):
         return None
 
 
+# --------------------------------------------------------------------------- #
+# sites.yaml — the CTMS layer
+# --------------------------------------------------------------------------- #
+
+
+class RegulatoryTimelines(Strict):
+    cta_weeks: Normal
+    ec_weeks: Normal
+
+
+class Country(Strict):
+    country: Ident
+    name: str
+    language: str
+    regulatory: RegulatoryTimelines
+
+
+class Archetype(Strict):
+    """A site performance profile. Sites reference one rather than restating it."""
+
+    archetype: Ident
+    description: str
+    enrolment_per_month: Normal
+    contract_weeks: Normal
+    entry_lag_days: Normal
+    query_rate_per_form: Normal
+    deviation_rate_per_subject: Normal
+    query_response_days: Normal
+
+
+class Site(Strict):
+    site_id: Ident
+    country: Ident
+    name: str
+    principal_investigator: str
+    archetype: Ident
+
+
+class Milestone(Strict):
+    milestone: Ident
+    #: One predecessor, several (wait for the last), or none for the chain head.
+    predecessor: Ident | list[Ident] | None = None
+    weeks: Normal | None = None
+    #: Where the interval comes from when it is not declared here.
+    source: str | None = None
+
+
+class StaffTurnover(Strict):
+    probability_per_site: Fraction
+    starts_week: Normal
+    duration_weeks: Normal
+    entry_lag_multiplier: Positive
+
+
+class SitesConfig(Strict):
+    countries: list[Country]
+    archetypes: list[Archetype]
+    sites: list[Site]
+    milestones: list[Milestone]
+    staff_turnover: StaffTurnover
+
+    def country(self, code: str) -> Country | None:
+        return next((c for c in self.countries if c.country == code), None)
+
+    def archetype(self, name: str) -> Archetype | None:
+        return next((a for a in self.archetypes if a.archetype == name), None)
+
+    def site(self, site_id: str) -> Site | None:
+        return next((s for s in self.sites if s.site_id == site_id), None)
+
+
+# --------------------------------------------------------------------------- #
+# crf.yaml — the EDC layer
+# --------------------------------------------------------------------------- #
+
+
+class Item(Strict):
+    item_id: Ident
+    label: str
+    type: str
+    unit: str | None = None
+    codelist: Ident | None = None
+    sdtm: str | None = None
+
+
+class Form(Strict):
+    form_id: Ident
+    name: str
+    #: ONCE, PER_VISIT, PER_ASSESSMENT, PER_CYCLE.
+    scope: str
+    sdtm_domain: str | None = None
+    items: list[Item]
+
+    def item(self, item_id: str) -> Item | None:
+        return next((i for i in self.items if i.item_id == item_id), None)
+
+
+class EditCheck(Strict):
+    check_id: Ident
+    form_id: Ident
+    item_id: Ident
+    kind: str
+    severity: str
+    text: str
+    low: float | None = None
+    high: float | None = None
+    expected: str | None = None
+    before: Ident | None = None
+
+
+class QueryBehaviour(Strict):
+    data_management_rate_per_form: Fraction
+    monitor_rate_per_form: Fraction
+    requery_probability: Fraction
+    max_requeries: int
+    notification_days: Normal
+    closure_days: Normal
+
+
+class ValueSource(Strict):
+    """How one item's value is produced."""
+
+    kind: str
+    mean: float | None = None
+    sd: float | None = None
+    minimum: float | None = None
+    maximum: float | None = None
+    decimals: int = 0
+    weights: dict[str, float] | None = None
+    value: str | None = None
+    #: For FROM_STUDY: which computed quantity to read.
+    field: str | None = None
+
+
+class CrfConfig(Strict):
+    forms: list[Form]
+    codelists: dict[str, list[str]]
+    edit_checks: list[EditCheck]
+    queries: QueryBehaviour
+    value_sources: dict[str, ValueSource]
+
+    def form(self, form_id: str) -> Form | None:
+        return next((f for f in self.forms if f.form_id == form_id), None)
+
+    def checks_for(self, form_id: str) -> list[EditCheck]:
+        return [c for c in self.edit_checks if c.form_id == form_id]
+
+
+# --------------------------------------------------------------------------- #
+# monitoring.yaml
+# --------------------------------------------------------------------------- #
+
+
+class VisitType(Strict):
+    visit_type: Ident
+    name: str
+    trigger: str
+    milestone: Ident | None = None
+    interval_weeks: Positive | None = None
+
+
+class ForCauseTrigger(Strict):
+    query_rate_multiple_of_mean: Positive
+    minimum_subjects: int
+
+
+class SdvStrategy(Strict):
+    strategy: str
+    critical_items: list[Ident]
+    non_critical_sample_rate: Fraction
+
+
+class Finding(Strict):
+    finding_id: Ident
+    category: str
+    severity: str
+    rate_per_visit: NonNegative
+    text: str
+
+
+class ActionItems(Strict):
+    due_days: int
+    overdue_probability: Fraction
+
+
+class DeviationCategory(Strict):
+    category: str
+    classification: str
+    weight: Positive
+
+
+class Deviations(Strict):
+    categories: list[DeviationCategory]
+    eligibility_violation_excludes_from_pp: Fraction
+
+
+class MonitoringConfig(Strict):
+    visit_types: list[VisitType]
+    for_cause_trigger: ForCauseTrigger
+    source_data_verification: SdvStrategy
+    findings: list[Finding]
+    action_items: ActionItems
+    deviations: Deviations
+
+
+# --------------------------------------------------------------------------- #
+# tmf_model.yaml
+# --------------------------------------------------------------------------- #
+
+
+class Zone(Strict):
+    zone: str
+    name: str
+
+
+class Artifact(Strict):
+    artifact: str
+    name: str
+    zone: str
+    #: TRIAL, COUNTRY, SITE or MONITORING_VISIT.
+    level: str
+    arrival_weeks: Normal
+    missing_probability: Fraction
+    #: The milestone that makes this artifact expected. Absent for artifacts
+    #: expected per monitoring visit.
+    expected_at: str | None = None
+
+
+class TmfConfig(Strict):
+    zones: list[Zone]
+    artifacts: list[Artifact]
+    timeliness_target_weeks: NonNegative
+    version_probability: Fraction
+
+    def zone_name(self, zone: str) -> str:
+        return next((z.name for z in self.zones if z.zone == zone), zone)
+
+
 class ClinicalConfig(Strict):
     protocol: ProtocolConfig
     tumour: TumourConfig
+    sites: SitesConfig
+    crf: CrfConfig
+    monitoring: MonitoringConfig
+    tmf: TmfConfig
 
 
-CLINICAL_CONFIG_FILES: dict[str, str] = {"protocol": "protocol", "tumour": "tumour"}
+CLINICAL_CONFIG_FILES: dict[str, str] = {
+    "protocol": "protocol",
+    "tumour": "tumour",
+    "sites": "sites",
+    "crf": "crf",
+    "monitoring": "monitoring",
+    "tmf_model": "tmf",
+}

@@ -1,0 +1,103 @@
+# Countries, sites and the activation chain — the CTMS layer.
+#
+# Enrolment is a CONSEQUENCE of this file, not a separate setting. A site cannot
+# randomise anybody before its green light, and its green light waits on a
+# contract, an ethics committee and a regulatory authority, each with its own
+# cycle time. A site that activates four months late contributes a handful of
+# subjects and nothing anyone does about recruitment changes that.
+#
+# Performance is declared as archetypes rather than per site, because that is how
+# a study manager actually thinks about a portfolio of sites: a couple of strong
+# recruiters, one that never gets its contract signed, one whose data quality
+# generates three times the queries of anyone else.
+
+countries:
+  - country: DE
+    name: Germany
+    language: de
+    regulatory:
+      # Clinical trial application to authorisation.
+      cta_weeks: {mean: 9.0, sd: 2.0}
+      # Ethics committee submission to favourable opinion.
+      ec_weeks: {mean: 7.5, sd: 1.8}
+  - country: ES
+    name: Spain
+    language: es
+    regulatory:
+      cta_weeks: {mean: 11.5, sd: 2.5}
+      ec_weeks: {mean: 9.0, sd: 2.2}
+
+archetypes:
+  - archetype: STRONG_RECRUITER
+    description: High-volume thoracic oncology centre with a dedicated trials unit
+    enrolment_per_month: {mean: 1.9, sd: 0.45}
+    contract_weeks: {mean: 7.0, sd: 1.5}
+    entry_lag_days: {mean: 3.2, sd: 1.4}
+    query_rate_per_form: {mean: 0.09, sd: 0.03}
+    deviation_rate_per_subject: {mean: 0.34, sd: 0.10}
+    query_response_days: {mean: 5.0, sd: 2.5}
+
+  - archetype: STEADY
+    description: Competent site, unremarkable in every direction
+    enrolment_per_month: {mean: 1.1, sd: 0.30}
+    contract_weeks: {mean: 9.0, sd: 2.0}
+    entry_lag_days: {mean: 6.5, sd: 2.5}
+    query_rate_per_form: {mean: 0.14, sd: 0.04}
+    deviation_rate_per_subject: {mean: 0.55, sd: 0.14}
+    query_response_days: {mean: 9.0, sd: 4.0}
+
+  - archetype: SLOW_CONTRACT
+    description: >-
+      Enrols perfectly well once open, but the contract takes five months and
+      that is five months of accrual nobody gets back
+    enrolment_per_month: {mean: 1.4, sd: 0.35}
+    contract_weeks: {mean: 22.0, sd: 4.0}
+    entry_lag_days: {mean: 7.0, sd: 3.0}
+    query_rate_per_form: {mean: 0.13, sd: 0.04}
+    deviation_rate_per_subject: {mean: 0.50, sd: 0.13}
+    query_response_days: {mean: 10.0, sd: 4.5}
+
+  - archetype: POOR_DATA_QUALITY
+    description: >-
+      Recruits acceptably and generates three times the queries of anyone else.
+      The site that triggers a for-cause monitoring visit
+    enrolment_per_month: {mean: 1.2, sd: 0.30}
+    contract_weeks: {mean: 10.0, sd: 2.5}
+    entry_lag_days: {mean: 14.0, sd: 6.0}
+    query_rate_per_form: {mean: 0.38, sd: 0.09}
+    deviation_rate_per_subject: {mean: 1.05, sd: 0.22}
+    query_response_days: {mean: 17.0, sd: 7.0}
+
+sites:
+  - {site_id: DE-001, country: DE, name: Universitätsklinikum Nord, principal_investigator: A. Brandt, archetype: STRONG_RECRUITER}
+  - {site_id: DE-002, country: DE, name: Klinikum Süd Thoraxzentrum, principal_investigator: M. Keller, archetype: STEADY}
+  - {site_id: DE-003, country: DE, name: Städtisches Klinikum Ostpark, principal_investigator: H. Vogel, archetype: POOR_DATA_QUALITY}
+  - {site_id: ES-001, country: ES, name: Hospital Universitario Central, principal_investigator: L. Moreno, archetype: STRONG_RECRUITER}
+  - {site_id: ES-002, country: ES, name: Hospital del Mar Oncología, principal_investigator: J. Ferrer, archetype: SLOW_CONTRACT}
+  - {site_id: ES-003, country: ES, name: Complejo Hospitalario Riberas, principal_investigator: C. Ibáñez, archetype: STEADY}
+
+# The activation chain. Each milestone waits on its predecessor, so a slow
+# contract pushes everything after it. `source` says where the interval comes
+# from: a fixed distribution here, the site's archetype, or the country.
+milestones:
+  - {milestone: FEASIBILITY_COMPLETE, predecessor: null, weeks: {mean: 0.0, sd: 0.0}}
+  - {milestone: CDA_EXECUTED, predecessor: FEASIBILITY_COMPLETE, weeks: {mean: 2.5, sd: 1.0}}
+  - {milestone: BUDGET_AGREED, predecessor: CDA_EXECUTED, weeks: {mean: 3.5, sd: 1.5}}
+  - {milestone: CONTRACT_EXECUTED, predecessor: BUDGET_AGREED, source: ARCHETYPE_CONTRACT}
+  - {milestone: EC_SUBMITTED, predecessor: CDA_EXECUTED, weeks: {mean: 3.0, sd: 1.2}}
+  - {milestone: EC_APPROVED, predecessor: EC_SUBMITTED, source: COUNTRY_EC}
+  - {milestone: REGULATORY_APPROVED, predecessor: EC_SUBMITTED, source: COUNTRY_CTA}
+  # Green light needs the contract, the ethics opinion and the authorisation, so
+  # it waits on whichever of them lands last.
+  - {milestone: GREEN_LIGHT, predecessor: [CONTRACT_EXECUTED, EC_APPROVED, REGULATORY_APPROVED], weeks: {mean: 1.0, sd: 0.5}}
+  - {milestone: SITE_INITIATION_VISIT, predecessor: GREEN_LIGHT, weeks: {mean: 2.0, sd: 0.8}}
+  - {milestone: SITE_READY_TO_ENROL, predecessor: SITE_INITIATION_VISIT, weeks: {mean: 0.5, sd: 0.3}}
+
+# One site's data entry degrades for a stretch and then recovers. Realism here is
+# specific rather than uniform: a coordinator leaves, the backlog builds, a
+# replacement is trained.
+staff_turnover:
+  probability_per_site: 0.35
+  starts_week: {mean: 30.0, sd: 12.0}
+  duration_weeks: {mean: 6.5, sd: 2.0}
+  entry_lag_multiplier: 3.2

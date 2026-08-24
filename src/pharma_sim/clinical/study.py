@@ -22,6 +22,15 @@ from datetime import date, timedelta
 from random import Random
 
 from pharma_sim.clinical.config import ClinicalConfig
+from pharma_sim.clinical.ctms import SiteActivation, activate_sites, allocate_enrolment
+from pharma_sim.clinical.oversight import OversightOutput, generate_oversight
+from pharma_sim.clinical.edc import (
+    EdcOutput,
+    SubjectContext,
+    VisitRecord,
+    generate_edc,
+)
+from pharma_sim.engine.ids import IdFactory
 from pharma_sim.clinical.lesion import (
     ReaderSelection,
     SubjectTumour,
@@ -55,13 +64,57 @@ class StudyOutput:
     tr: list[dict] = field(default_factory=list)
     rs: list[dict] = field(default_factory=list)
     adtte: list[dict] = field(default_factory=list)
+    # CTMS
+    sites: list[dict] = field(default_factory=list)
+    site_milestones: list[dict] = field(default_factory=list)
+    # EDC
+    forms: list[dict] = field(default_factory=list)
+    item_data: list[dict] = field(default_factory=list)
+    queries: list[dict] = field(default_factory=list)
+    query_events: list[dict] = field(default_factory=list)
+    item_audit: list[dict] = field(default_factory=list)
+    # Oversight
+    monitoring_visits: list[dict] = field(default_factory=list)
+    findings: list[dict] = field(default_factory=list)
+    action_items: list[dict] = field(default_factory=list)
+    sdv: list[dict] = field(default_factory=list)
+    deviations: list[dict] = field(default_factory=list)
+    tmf_documents: list[dict] = field(default_factory=list)
+    reconciliations: list[dict] = field(default_factory=list)
+    lock_events: list[dict] = field(default_factory=list)
     #: Ground truth, for the evaluation store only. Never exported operationally.
     truth: list[dict] = field(default_factory=list)
 
+    @property
+    def tmf_completeness(self) -> float:
+        if not self.tmf_documents:
+            return 0.0
+        filed = sum(1 for row in self.tmf_documents if row["status"] == "FILED")
+        return 100.0 * filed / len(self.tmf_documents)
+
+    @property
+    def tmf_timeliness(self) -> float:
+        filed = [row for row in self.tmf_documents if row["status"] == "FILED"]
+        if not filed:
+            return 0.0
+        return 100.0 * sum(1 for row in filed if not row["late"]) / len(filed)
+
     def summary(self) -> str:
-        lines = [f"{self.study_id}", f"  subjects {len(self.subjects)}"
-                 f"  TU {len(self.tu)}  TR {len(self.tr)}  RS {len(self.rs)}"
-                 f"  ADTTE {len(self.adtte)}"]
+        lines = [
+            f"{self.study_id}",
+            f"  sites {len(self.sites)}  subjects {len(self.subjects)}"
+            f"  TU {len(self.tu)}  TR {len(self.tr)}  RS {len(self.rs)}"
+            f"  ADTTE {len(self.adtte)}",
+            f"  forms {len(self.forms)}  items {len(self.item_data)}"
+            f"  queries {len(self.queries)}  query events {len(self.query_events)}"
+            f"  item audit {len(self.item_audit)}",
+            f"  monitoring visits {len(self.monitoring_visits)}"
+            f"  findings {len(self.findings)}  SDV {len(self.sdv)}"
+            f"  deviations {len(self.deviations)}",
+            f"  TMF documents {len(self.tmf_documents)}"
+            f" — {self.tmf_completeness:.1f}% complete,"
+            f" {self.tmf_timeliness:.1f}% filed on time",
+        ]
         arms = sorted({row["ARM"] for row in self.subjects})
         evaluators = sorted({row["EVAL"] for row in self.adtte})
         header = f"  {'arm':<8}{'n':>4}" + "".join(
@@ -118,115 +171,343 @@ def _iso(day: date) -> str:
     return day.isoformat()
 
 
+def _permuted_blocks(arms, rng) -> list[str]:
+    """Permuted block randomisation honouring the allocation ratio.
+
+    A block is one repetition of the ratio, shuffled. It keeps the arms balanced
+    throughout accrual rather than only at the end, which matters because accrual
+    runs for over a year and an interim look must not find the arms lopsided.
+    """
+    block: list[str] = []
+    for arm in arms:
+        block.extend([arm.arm_id] * arm.allocation)
+    target = {arm.arm_id: arm.subjects for arm in arms}
+    assigned: dict[str, int] = {arm.arm_id: 0 for arm in arms}
+    sequence: list[str] = []
+    total = sum(target.values())
+    while len(sequence) < total:
+        draw = block[:]
+        rng.shuffle(draw)
+        for arm_id in draw:
+            if len(sequence) >= total:
+                break
+            if assigned[arm_id] < target[arm_id]:
+                assigned[arm_id] += 1
+                sequence.append(arm_id)
+    return sequence
+
+
 def run_study(config: ClinicalConfig, seed: int = 42) -> StudyOutput:
-    """Run the whole study and return it in SDTM/ADaM shape."""
+    """Run the whole study and return it in SDTM, ADaM and operational shape."""
     protocol = config.protocol
     tumour_config = config.tumour
     rules = rules_from_config(tumour_config)
     rngs = RngRegistry(seed)
+    ids = IdFactory()
     out = StudyOutput(study_id=protocol.study_id)
 
-    first_in = protocol.enrolment.first_subject_in
     cutoff_week = protocol.analysis.cutoff_weeks_from_fsi
     horizon = protocol.analysis.horizon_weeks
+    cycle_weeks = protocol.cycle_length_days / 7.0
 
-    sequence = 0
-    for arm in protocol.arms:
-        for index in range(1, arm.subjects + 1):
-            sequence += 1
-            subject_id = f"{protocol.study_id}-{sequence:04d}"
-            subject_rng = rngs.child("clin", "subject", subject_id)
+    # ------------------------------------------------------------------ CTMS
+    activations = activate_sites(config, lambda site_id: rngs.child("clin", "site", site_id))
+    by_site = {activation.site_id: activation for activation in activations}
+    _emit_sites(out, protocol.study_id, activations, protocol.enrolment.first_subject_in)
 
-            # Accrual is spread across the enrolment period, so the last subject
-            # randomised has far less follow-up than the first. That is where
-            # administrative censoring comes from.
-            offset_weeks = subject_rng.random() * protocol.enrolment.accrual_weeks
-            randomised = first_in + timedelta(weeks=offset_weeks)
-            # Follow-up available to this subject before the data cut.
-            available = max(cutoff_week - offset_weeks, 0.0)
+    enrolments = allocate_enrolment(activations, config, rngs.child("clin", "enrolment"))
+    arm_sequence = _permuted_blocks(protocol.arms, rngs.child("clin", "randomisation"))
 
-            tumour = build_tumour(
-                subject_id, arm.arm_id, tumour_config,
-                rngs.child("clin", "tumour", subject_id), horizon_weeks=horizon,
+    turnover_multiplier = config.sites.staff_turnover.entry_lag_multiplier
+    contexts: list[SubjectContext] = []
+
+    for index, enrolment in enumerate(enrolments):
+        subject_id = f"{protocol.study_id}-{index + 1:04d}"
+        arm_id = arm_sequence[index]
+        arm = protocol.arm(arm_id)
+        assert arm is not None
+        activation = by_site[enrolment.site_id]
+        randomised = enrolment.randomised
+        available = max(cutoff_week - enrolment.week, 0.0)
+
+        subject_rng = rngs.child("clin", "subject", subject_id)
+        consent = randomised - timedelta(days=subject_rng.randint(7, 28))
+
+        tumour = build_tumour(
+            subject_id, arm_id, tumour_config,
+            rngs.child("clin", "tumour", subject_id), horizon_weeks=horizon,
+        )
+        weeks = assessment_weeks(
+            tumour_config, rngs.child("clin", "schedule", subject_id), horizon
+        )
+
+        out.subjects.append(
+            {
+                "STUDYID": protocol.study_id,
+                "USUBJID": subject_id,
+                "SITEID": enrolment.site_id,
+                "COUNTRY": activation.country,
+                "ARM": arm_id,
+                "ARMCD": arm_id,
+                "TRT01P": arm.label,
+                "RFICDTC": _iso(consent),
+                "RANDDT": _iso(randomised),
+                "RFSTDTC": _iso(randomised),
+                "ENROL_WEEK": round(enrolment.week, 2),
+                "FOLLOWUP_WEEKS": round(available, 2),
+            }
+        )
+        out.truth.append(
+            {
+                "USUBJID": subject_id,
+                "ARM": arm_id,
+                "SITEID": enrolment.site_id,
+                "measurable_lesions": len(tumour.lesions),
+                "sensitive_fraction": round(tumour.growth.sensitive_fraction, 5),
+                "shrinkage_rate_per_week": round(tumour.growth.shrinkage_rate_per_week, 6),
+                "growth_rate_per_week": round(tumour.growth.growth_rate_per_week, 6),
+                "new_lesion_week": tumour.new_lesion_week,
+                "non_target_progression_week": tumour.non_target_progression_week,
+                "death_week": tumour.death_week,
+            }
+        )
+
+        primary_course: list[Assessment] = []
+        primary_outcome = None
+        assessment_facts: dict[int, dict[str, object]] = {}
+
+        for reader in tumour_config.measurement.readers:
+            selection = select_targets(
+                tumour, reader, tumour_config,
+                rngs.child("clin", "select", subject_id, reader.reader_id),
             )
-            weeks = assessment_weeks(
-                tumour_config, rngs.child("clin", "schedule", subject_id), horizon
+            _emit_tu(out, protocol.study_id, subject_id, selection, reader.role, randomised)
+
+            baseline = measure(
+                tumour, selection, 0.0, reader, tumour_config,
+                rngs.child("clin", "measure", subject_id, reader.reader_id, "baseline"),
             )
-
-            out.subjects.append(
-                {
-                    "STUDYID": protocol.study_id,
-                    "USUBJID": subject_id,
-                    "ARM": arm.arm_id,
-                    "ARMCD": arm.arm_id,
-                    "TRT01P": arm.label,
-                    "RANDDT": _iso(randomised),
-                    "RFSTDTC": _iso(randomised),
-                    "FOLLOWUP_WEEKS": round(available, 2),
-                }
-            )
-            out.truth.append(
-                {
-                    "USUBJID": subject_id,
-                    "ARM": arm.arm_id,
-                    "measurable_lesions": len(tumour.lesions),
-                    "sensitive_fraction": round(tumour.growth.sensitive_fraction, 5),
-                    "shrinkage_rate_per_week": round(tumour.growth.shrinkage_rate_per_week, 6),
-                    "growth_rate_per_week": round(tumour.growth.growth_rate_per_week, 6),
-                    "new_lesion_week": tumour.new_lesion_week,
-                    "non_target_progression_week": tumour.non_target_progression_week,
-                    "death_week": tumour.death_week,
-                }
-            )
-
-            death_week = tumour.death_week
-
-            for reader in tumour_config.measurement.readers:
-                selection = select_targets(
-                    tumour, reader, tumour_config,
-                    rngs.child("clin", "select", subject_id, reader.reader_id),
-                )
-                _emit_tu(out, protocol.study_id, subject_id, selection, reader.role, randomised)
-
-                baseline = measure(
-                    tumour, selection, 0.0, reader, tumour_config,
-                    rngs.child("clin", "measure", subject_id, reader.reader_id, "baseline"),
-                )
-                timepoints: list[Timepoint] = []
-                for week, missed in weeks:
-                    if week > available:
-                        break
-                    timepoints.append(
-                        measure(
-                            tumour, selection, week, reader, tumour_config,
-                            rngs.child(
-                                "clin", "measure", subject_id, reader.reader_id, f"{week}"
-                            ),
-                            missed=missed,
-                        )
+            timepoints: list[Timepoint] = []
+            for week, missed in weeks:
+                if week > available:
+                    break
+                timepoints.append(
+                    measure(
+                        tumour, selection, week, reader, tumour_config,
+                        rngs.child("clin", "measure", subject_id, reader.reader_id, f"{week}"),
+                        missed=missed,
                     )
-
-                course = evaluate_course(timepoints, baseline, rules, reader.reader_id)
-                _emit_tr(
-                    out, protocol.study_id, subject_id, reader.reader_id, reader.role,
-                    [baseline, *timepoints], randomised,
-                )
-                _emit_rs(
-                    out, protocol.study_id, subject_id, reader.reader_id, reader.role,
-                    course, rules, randomised,
                 )
 
-                outcome = derive_pfs(
-                    course,
-                    evaluator=reader.reader_id,
-                    death_week=death_week,
-                    analysis_week=available,
-                )
-                _emit_adtte(
-                    out, protocol.study_id, subject_id, arm, outcome, randomised, available
-                )
+            course = evaluate_course(timepoints, baseline, rules, reader.reader_id)
+
+            # Tumour assessment stops at documented progression. A subject who
+            # progresses comes off study treatment and moves to survival
+            # follow-up, so there are no further RECIST timepoints. Continuing to
+            # assess them produced sums of over 1,500 mm by the data cut, because
+            # a resistant tumour grows exponentially and nothing was stopping it.
+            progressed = next(
+                (index for index, a in enumerate(course) if a.response == "PD"), None
+            )
+            if progressed is not None:
+                course = course[: progressed + 1]
+                timepoints = timepoints[: progressed + 1]
+
+            _emit_tr(
+                out, protocol.study_id, subject_id, reader.reader_id, reader.role,
+                [baseline, *timepoints], randomised,
+            )
+            _emit_rs(
+                out, protocol.study_id, subject_id, reader.reader_id, reader.role,
+                course, rules, randomised,
+            )
+            outcome = derive_pfs(
+                course, evaluator=reader.reader_id,
+                death_week=tumour.death_week, analysis_week=available,
+            )
+            _emit_adtte(
+                out, protocol.study_id, subject_id, arm, outcome, randomised, available
+            )
+
+            # The investigator's read is what drives treatment decisions and
+            # therefore what the case report form records.
+            if reader.role == "INVESTIGATOR":
+                primary_course, primary_outcome = course, outcome
+                for order, assessment in enumerate(course, start=1):
+                    visitnum, _ = _visit_label(order)
+                    assessment_facts[visitnum] = {
+                        "SUM_OF_DIAMETERS": round(assessment.target.sum_of_diameters_mm, 1),
+                        "OVERALL_RESPONSE": assessment.response,
+                        "NEW_LESION": "Y" if assessment.new_lesion else "N",
+                        "NON_TARGET_RESPONSE": assessment.non_target,
+                    }
+
+        assert primary_outcome is not None
+        contexts.append(
+            _build_context(
+                subject_id, enrolment.site_id, arm_id, randomised, consent,
+                primary_course, primary_outcome, assessment_facts,
+                activation, enrolment.week, available, cycle_weeks,
+                turnover_multiplier, ids, rngs.child("clin", "cycles", subject_id),
+            )
+        )
+
+    # ------------------------------------------------------------------- EDC
+    edc = generate_edc(contexts, config, lambda sid: rngs.child("clin", "edc", sid), ids)
+    out.forms = edc.forms
+    out.item_data = edc.items
+    out.queries = edc.queries
+    out.query_events = edc.query_events
+    out.item_audit = edc.audit
+
+    # ------------------------------------------------------------- oversight
+    oversight = generate_oversight(
+        config,
+        activations,
+        out.subjects,
+        out.forms,
+        out.queries,
+        protocol.enrolment.first_subject_in,
+        lambda key: rngs.child("clin", "oversight", key),
+        ids,
+    )
+    out.monitoring_visits = oversight.monitoring_visits
+    out.findings = oversight.findings
+    out.action_items = oversight.action_items
+    out.sdv = oversight.sdv
+    out.deviations = oversight.deviations
+    out.tmf_documents = oversight.tmf_documents
+    out.reconciliations = oversight.reconciliations
+    out.lock_events = oversight.lock_events
 
     return out
+
+
+def _build_context(
+    subject_id: str,
+    site_id: str,
+    arm_id: str,
+    randomised: date,
+    consent: date,
+    course: list[Assessment],
+    outcome: PfsOutcome,
+    assessment_facts: dict[int, dict[str, object]],
+    activation: SiteActivation,
+    enrol_week: float,
+    available_weeks: float,
+    cycle_weeks: float,
+    turnover_multiplier: float,
+    ids: IdFactory,
+    rng,
+) -> SubjectContext:
+    """Assemble the EDC view of one subject from what the study already computed."""
+    # Treatment runs until progression, death or the data cut, whichever is first.
+    on_treatment = min(outcome.week, available_weeks)
+    cycles = max(1, int(on_treatment // cycle_weeks) + 1)
+
+    visits: list[VisitRecord] = [
+        VisitRecord(visitnum=0, visit="SCREENING", day=consent, kind="SCREENING")
+    ]
+    cycle_facts: dict[int, dict[str, object]] = {}
+    dose = 240.0
+    for cycle in range(1, cycles + 1):
+        visitnum = 100 + cycle
+        day = randomised + timedelta(weeks=(cycle - 1) * cycle_weeks)
+        # Dose reductions accumulate: once reduced, a subject rarely returns to
+        # full dose, so this steps down rather than fluctuating.
+        adjusted = rng.random() < 0.06
+        if adjusted and dose > 120.0:
+            dose -= 60.0
+        cycle_facts[visitnum] = {
+            "DOSE": dose,
+            "DOSE_ADJUSTED": "Y" if adjusted else "N",
+            "KIT_NUMBER": f"KIT-{ids.next('K', width=6).split('-')[1]}",
+        }
+        visits.append(
+            VisitRecord(visitnum=visitnum, visit=f"CYCLE {cycle} DAY 1", day=day, kind="CYCLE")
+        )
+
+    for order, assessment in enumerate(course, start=1):
+        visitnum, label = _visit_label(order)
+        visits.append(
+            VisitRecord(
+                visitnum=visitnum,
+                visit=label,
+                day=randomised + timedelta(weeks=assessment.week),
+                kind="ASSESSMENT",
+            )
+        )
+
+    end_of_treatment = randomised + timedelta(weeks=on_treatment)
+    reason = {
+        "PROGRESSION": "DISEASE PROGRESSION",
+        "DEATH": "DEATH",
+    }.get(outcome.reason)
+    if reason is not None:
+        visits.append(
+            VisitRecord(
+                visitnum=900, visit="END OF TREATMENT", day=end_of_treatment,
+                kind="END_OF_TREATMENT",
+            )
+        )
+
+    return SubjectContext(
+        subject_id=subject_id,
+        site_id=site_id,
+        arm=arm_id,
+        randomised=randomised,
+        consent_date=consent,
+        visits=tuple(sorted(visits, key=lambda visit: (visit.day, visit.visitnum))),
+        assessment_facts=assessment_facts,
+        cycle_facts=cycle_facts,
+        end_of_treatment=end_of_treatment if reason else None,
+        discontinuation_reason=reason,
+        entry_lag_days=activation.entry_lag_at(enrol_week, turnover_multiplier),
+        query_rate_per_form=activation.query_rate_per_form,
+        query_response_days=activation.query_response_days,
+    )
+
+
+def _emit_sites(
+    out: StudyOutput,
+    study_id: str,
+    activations: list[SiteActivation],
+    first_in: date,
+) -> None:
+    """CTMS site and milestone records."""
+    for activation in activations:
+        out.sites.append(
+            {
+                "STUDYID": study_id,
+                "SITEID": activation.site_id,
+                "COUNTRY": activation.country,
+                "SITE_NAME": activation.name,
+                "PRINCIPAL_INVESTIGATOR": activation.principal_investigator,
+                "ARCHETYPE": activation.archetype,
+                "READY_WEEK": round(activation.ready_week, 2),
+                "READY_DATE": _iso(first_in + timedelta(weeks=activation.ready_week)),
+                "PLANNED_ENROLMENT_PER_MONTH": round(activation.enrolment_per_month, 2),
+                "ENTRY_LAG_DAYS": round(activation.entry_lag_days, 2),
+                "STAFF_TURNOVER_FROM_WEEK": (
+                    None if activation.turnover_from is None
+                    else round(activation.turnover_from, 1)
+                ),
+                "STAFF_TURNOVER_TO_WEEK": (
+                    None if activation.turnover_to is None
+                    else round(activation.turnover_to, 1)
+                ),
+            }
+        )
+        for milestone, week in activation.milestones.items():
+            out.site_milestones.append(
+                {
+                    "STUDYID": study_id,
+                    "SITEID": activation.site_id,
+                    "MILESTONE": milestone,
+                    "WEEK": round(week, 2),
+                    "MILESTONE_DATE": _iso(first_in + timedelta(weeks=week)),
+                }
+            )
 
 
 def _emit_tu(

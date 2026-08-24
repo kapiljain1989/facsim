@@ -34,12 +34,17 @@ endpoints:
 
 enrolment:
   first_subject_in: 2026-03-16
-  # Accrual runs about fourteen months, so the last subject enrolled has far less
-  # follow-up than the first. That imbalance is what censoring is for.
-  accrual_weeks: 62.0
+  # The PLAN. Actual accrual is derived from site activation in sites.yaml -- a
+  # site cannot enrol before its green light -- so this is the number the actual
+  # gets reported against, which is what a study manager is asked about.
+  planned_accrual_weeks: 62.0
 
 analysis:
-  # Data cut-off, measured in weeks from the first subject randomised.
-  cutoff_weeks_from_fsi: 130.0
+  # Data cut-off, in weeks from the first subject randomised. Deliberately lands
+  # while subjects are still on treatment, which is what a primary PFS analysis
+  # does: the alternative leaves months of clean-up after the last subject and
+  # every query closes before the cut, so the burn-down into database lock has
+  # nothing in it.
+  cutoff_weeks_from_fsi: 108.0
   # Follow-up horizon simulated per subject.
   horizon_weeks: 156.0

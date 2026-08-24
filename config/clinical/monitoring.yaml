@@ -1,0 +1,59 @@
+# Monitoring, source data verification and protocol deviations.
+#
+# SDV is risk-based rather than 100%: critical data at every subject, everything
+# else sampled. That is what a 2020s oncology study actually does, and it means
+# the coverage figure in the data is a number somebody could be asked to defend.
+
+visit_types:
+  - {visit_type: SIV, name: Site Initiation Visit, trigger: MILESTONE, milestone: SITE_INITIATION_VISIT}
+  - {visit_type: IMV, name: Interim Monitoring Visit, trigger: PERIODIC, interval_weeks: 14.0}
+  - {visit_type: FOR_CAUSE, name: For-Cause Monitoring Visit, trigger: RISK}
+  - {visit_type: COV, name: Close-Out Visit, trigger: END_OF_STUDY}
+
+# A site whose query rate runs this many times the study mean gets an unscheduled
+# visit. The threshold is declared, so which sites trip it is an outcome.
+for_cause_trigger:
+  query_rate_multiple_of_mean: 2.0
+  minimum_subjects: 3
+
+source_data_verification:
+  strategy: RISK_BASED
+  # Verified for every subject, every time.
+  critical_items: [ICDAT, G12CRES, ECOG, PRIORTX, INCALL, EXCNONE, OVRLRESP, SUMDIAM, DSREAS, EXDOSE, KITNO]
+  # Everything else is sampled at this rate.
+  non_critical_sample_rate: 0.22
+
+findings:
+  # What a monitor writes up, and how often per visit.
+  - {finding_id: F001, category: SOURCE_DISCREPANCY, severity: MINOR, rate_per_visit: 0.85,
+     text: Source document value differs from the value entered in the EDC}
+  - {finding_id: F002, category: DELEGATION_LOG, severity: MINOR, rate_per_visit: 0.30,
+     text: Delegation of authority log not updated for new site staff}
+  - {finding_id: F003, category: CONSENT, severity: MAJOR, rate_per_visit: 0.14,
+     text: Informed consent form not signed on the version current at the time of consent}
+  - {finding_id: F004, category: IP_ACCOUNTABILITY, severity: MAJOR, rate_per_visit: 0.22,
+     text: Investigational product accountability log incomplete}
+  - {finding_id: F005, category: TEMPERATURE, severity: MAJOR, rate_per_visit: 0.10,
+     text: Investigational product storage temperature log has unexplained gaps}
+  - {finding_id: F006, category: ASSESSMENT_WINDOW, severity: MINOR, rate_per_visit: 0.45,
+     text: Tumour assessment performed outside the protocol-defined window}
+  - {finding_id: F007, category: LAB_CERTIFICATION, severity: MINOR, rate_per_visit: 0.12,
+     text: Local laboratory certification expired during the reporting period}
+
+action_items:
+  # A finding becomes an action item with a due date; some are not closed on time.
+  due_days: 30
+  overdue_probability: 0.16
+
+deviations:
+  categories:
+    - {category: ASSESSMENT_OUT_OF_WINDOW, classification: MINOR, weight: 0.42}
+    - {category: PROCEDURE_NOT_PERFORMED, classification: MINOR, weight: 0.18}
+    - {category: VISIT_NOT_PERFORMED, classification: MINOR, weight: 0.12}
+    - {category: DOSING_OUTSIDE_PROTOCOL, classification: MAJOR, weight: 0.13}
+    - {category: ELIGIBILITY_VIOLATION, classification: MAJOR, weight: 0.06}
+    - {category: CONSENT_PROCESS, classification: MAJOR, weight: 0.05}
+    - {category: IP_HANDLING, classification: MAJOR, weight: 0.04}
+  # A major eligibility violation may exclude the subject from the per-protocol
+  # population, which is the sort of thing that has to be traceable.
+  eligibility_violation_excludes_from_pp: 0.6

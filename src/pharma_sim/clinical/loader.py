@@ -140,3 +140,163 @@ def _lint(config: ClinicalConfig, collector: IssueCollector) -> None:
     if schedule.switch_week <= schedule.first_week:
         collector.add("tumour.yaml", "assessment_schedule.switch_week",
                       "must be later than first_week", "")
+
+    _lint_sites(config, collector)
+    _lint_crf(config, collector)
+    _lint_monitoring(config, collector)
+    _lint_tmf(config, collector)
+
+
+def _lint_sites(config: ClinicalConfig, collector: IssueCollector) -> None:
+    sites = config.sites
+    countries = {country.country for country in sites.countries}
+    archetypes = {archetype.archetype for archetype in sites.archetypes}
+    milestones = {milestone.milestone for milestone in sites.milestones}
+
+    for site in sites.sites:
+        if site.country not in countries:
+            collector.add("sites.yaml", f"sites.{site.site_id}.country",
+                          f"unknown country {site.country}", "")
+        if site.archetype not in archetypes:
+            collector.add("sites.yaml", f"sites.{site.site_id}.archetype",
+                          f"unknown archetype {site.archetype}",
+                          f"declared: {', '.join(sorted(archetypes))}")
+
+    seen: set[str] = set()
+    for milestone in sites.milestones:
+        predecessors = milestone.predecessor
+        if predecessors is None:
+            names: list[str] = []
+        elif isinstance(predecessors, str):
+            names = [predecessors]
+        else:
+            names = list(predecessors)
+        for name in names:
+            if name not in milestones:
+                collector.add("sites.yaml", f"milestones.{milestone.milestone}.predecessor",
+                              f"unknown milestone {name}", "")
+            elif name not in seen:
+                # Declaration order is the resolution order, so a milestone whose
+                # predecessor comes later can never be computed.
+                collector.add(
+                    "sites.yaml", f"milestones.{milestone.milestone}.predecessor",
+                    f"{name} is declared after this milestone",
+                    "list milestones in the order they occur",
+                )
+        if milestone.weeks is None and milestone.source is None:
+            collector.add("sites.yaml", f"milestones.{milestone.milestone}",
+                          "needs either weeks or source", "")
+        seen.add(milestone.milestone)
+
+
+def _lint_crf(config: ClinicalConfig, collector: IssueCollector) -> None:
+    crf = config.crf
+    forms = {form.form_id: form for form in crf.forms}
+    all_items = {item.item_id for form in crf.forms for item in form.items}
+
+    for form in crf.forms:
+        for item in form.items:
+            if item.codelist and item.codelist not in crf.codelists:
+                collector.add("crf.yaml", f"forms.{form.form_id}.{item.item_id}.codelist",
+                              f"unknown codelist {item.codelist}",
+                              f"declared: {', '.join(sorted(crf.codelists))}")
+
+    for item_id in sorted(all_items):
+        if item_id not in crf.value_sources:
+            collector.add("crf.yaml", f"value_sources.{item_id}",
+                          "no value source declared for this item",
+                          "every item on a form needs one, or the form is blank")
+    for item_id, source in crf.value_sources.items():
+        if item_id not in all_items:
+            collector.add("crf.yaml", f"value_sources.{item_id}",
+                          "value source for an item that is not on any form", "")
+        if source.kind == "WEIGHTED" and not source.weights:
+            collector.add("crf.yaml", f"value_sources.{item_id}",
+                          "a WEIGHTED source needs weights", "")
+        if source.kind == "CONSTANT" and source.value is None:
+            collector.add("crf.yaml", f"value_sources.{item_id}",
+                          "a CONSTANT source needs value", "")
+        if source.kind == "FROM_STUDY" and source.field is None:
+            collector.add("crf.yaml", f"value_sources.{item_id}",
+                          "a FROM_STUDY source needs field", "")
+        if source.kind == "NORMAL" and (source.mean is None or source.sd is None):
+            collector.add("crf.yaml", f"value_sources.{item_id}",
+                          "a NORMAL source needs mean and sd", "")
+
+    for check in crf.edit_checks:
+        form = forms.get(check.form_id)
+        if form is None:
+            collector.add("crf.yaml", f"edit_checks.{check.check_id}.form_id",
+                          f"unknown form {check.form_id}", "")
+            continue
+        if form.item(check.item_id) is None:
+            collector.add("crf.yaml", f"edit_checks.{check.check_id}.item_id",
+                          f"{check.item_id} is not an item on form {check.form_id}", "")
+        if check.kind == "RANGE" and (check.low is None or check.high is None):
+            collector.add("crf.yaml", f"edit_checks.{check.check_id}",
+                          "a RANGE check needs both low and high", "")
+        if check.kind == "EXPECTED_VALUE" and check.expected is None:
+            collector.add("crf.yaml", f"edit_checks.{check.check_id}",
+                          "an EXPECTED_VALUE check needs expected", "")
+        if check.kind == "DATE_ORDER":
+            if check.before is None:
+                collector.add("crf.yaml", f"edit_checks.{check.check_id}",
+                              "a DATE_ORDER check needs before", "")
+            elif check.before not in all_items:
+                collector.add("crf.yaml", f"edit_checks.{check.check_id}.before",
+                              f"unknown item {check.before}", "")
+
+
+def _lint_monitoring(config: ClinicalConfig, collector: IssueCollector) -> None:
+    monitoring = config.monitoring
+    milestones = {milestone.milestone for milestone in config.sites.milestones}
+    all_items = {item.item_id for form in config.crf.forms for item in form.items}
+
+    for visit_type in monitoring.visit_types:
+        if visit_type.trigger == "MILESTONE":
+            if visit_type.milestone not in milestones:
+                collector.add("monitoring.yaml", f"visit_types.{visit_type.visit_type}.milestone",
+                              f"unknown milestone {visit_type.milestone}", "")
+        if visit_type.trigger == "PERIODIC" and visit_type.interval_weeks is None:
+            collector.add("monitoring.yaml", f"visit_types.{visit_type.visit_type}",
+                          "a PERIODIC visit type needs interval_weeks", "")
+
+    for item_id in monitoring.source_data_verification.critical_items:
+        if item_id not in all_items:
+            collector.add(
+                "monitoring.yaml", "source_data_verification.critical_items",
+                f"{item_id} is not an item on any form",
+                "critical data has to exist before it can be verified",
+            )
+
+
+def _lint_tmf(config: ClinicalConfig, collector: IssueCollector) -> None:
+    tmf = config.tmf
+    zones = {zone.zone for zone in tmf.zones}
+    milestones = {milestone.milestone for milestone in config.sites.milestones}
+    #: Points in the study's life an artifact can become expected, beyond the
+    #: site milestone chain.
+    study_events = {
+        "STUDY_START", "END_OF_STUDY", "DATABASE_LOCK", "AMENDMENT", "IDMC_REVIEW",
+    }
+    levels = {"TRIAL", "COUNTRY", "SITE", "MONITORING_VISIT"}
+
+    for artifact in tmf.artifacts:
+        if artifact.zone not in zones:
+            collector.add("tmf_model.yaml", f"artifacts.{artifact.artifact}.zone",
+                          f"unknown zone {artifact.zone}", "")
+        if artifact.level not in levels:
+            collector.add("tmf_model.yaml", f"artifacts.{artifact.artifact}.level",
+                          f"unknown level {artifact.level}",
+                          f"one of: {', '.join(sorted(levels))}")
+        if artifact.level == "MONITORING_VISIT":
+            continue
+        if artifact.expected_at is None:
+            collector.add("tmf_model.yaml", f"artifacts.{artifact.artifact}",
+                          "needs expected_at unless its level is MONITORING_VISIT", "")
+        elif artifact.expected_at not in milestones | study_events:
+            collector.add(
+                "tmf_model.yaml", f"artifacts.{artifact.artifact}.expected_at",
+                f"{artifact.expected_at} is neither a site milestone nor a study event",
+                f"study events are: {', '.join(sorted(study_events))}",
+            )

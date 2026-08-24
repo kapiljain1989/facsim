@@ -1,0 +1,88 @@
+# The trial master file, against the DIA TMF Reference Model version 3.
+#
+# Completeness is an OUTCOME, not a setting. Each artifact becomes expected when
+# its milestone is reached — an executed contract is not expected before the
+# contract is executed — and then either arrives, arrives late, or never arrives.
+# The percentage at the end is whatever that produces, which is the only way the
+# figure means anything.
+#
+# `level` decides how many instances are expected: one for the trial, one per
+# country, or one per site.
+
+zones:
+  - {zone: "01", name: Trial Management}
+  - {zone: "02", name: Central Trial Documents}
+  - {zone: "03", name: Regulatory}
+  - {zone: "04", name: IRB / IEC and Other Approvals}
+  - {zone: "05", name: Site Management}
+  - {zone: "06", name: IP and Trial Supplies}
+  - {zone: "08", name: Central and Local Testing}
+  - {zone: "10", name: Data Management}
+  - {zone: "11", name: Statistics}
+
+artifacts:
+  # Zone 01 — Trial Management
+  - {artifact: 01.01.01, name: Trial Master File Plan, zone: "01", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 2.0, sd: 1.0}, missing_probability: 0.00}
+  - {artifact: 01.02.01, name: Trial Management Plan, zone: "01", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 3.0, sd: 1.5}, missing_probability: 0.00}
+  - {artifact: 01.04.01, name: Monitoring Plan, zone: "01", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 3.5, sd: 1.5}, missing_probability: 0.00}
+  - {artifact: 01.10.01, name: Independent Data Monitoring Committee Charter, zone: "01", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 5.0, sd: 2.0}, missing_probability: 0.02}
+  - {artifact: 01.10.02, name: Independent Data Monitoring Committee Minutes, zone: "01", level: TRIAL, expected_at: IDMC_REVIEW, arrival_weeks: {mean: 4.0, sd: 2.0}, missing_probability: 0.08}
+
+  # Zone 02 — Central Trial Documents
+  - {artifact: 02.01.01, name: Protocol, zone: "02", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 0.5, sd: 0.3}, missing_probability: 0.00}
+  - {artifact: 02.01.02, name: Protocol Amendment, zone: "02", level: TRIAL, expected_at: AMENDMENT, arrival_weeks: {mean: 1.5, sd: 0.8}, missing_probability: 0.00}
+  - {artifact: 02.02.01, name: Investigator's Brochure, zone: "02", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 1.0, sd: 0.5}, missing_probability: 0.00}
+  - {artifact: 02.03.01, name: Informed Consent Form Template, zone: "02", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 1.5, sd: 0.8}, missing_probability: 0.00}
+
+  # Zone 03 — Regulatory
+  - {artifact: 03.01.01, name: Clinical Trial Application, zone: "03", level: COUNTRY, expected_at: EC_SUBMITTED, arrival_weeks: {mean: 1.0, sd: 0.5}, missing_probability: 0.00}
+  - {artifact: 03.01.02, name: Regulatory Authority Approval, zone: "03", level: COUNTRY, expected_at: REGULATORY_APPROVED, arrival_weeks: {mean: 1.5, sd: 0.8}, missing_probability: 0.01}
+  - {artifact: 03.04.01, name: Notification of End of Trial, zone: "03", level: COUNTRY, expected_at: END_OF_STUDY, arrival_weeks: {mean: 4.0, sd: 2.0}, missing_probability: 0.10}
+
+  # Zone 04 — IRB / IEC
+  - {artifact: 04.01.01, name: Ethics Committee Submission, zone: "04", level: SITE, expected_at: EC_SUBMITTED, arrival_weeks: {mean: 1.0, sd: 0.5}, missing_probability: 0.01}
+  - {artifact: 04.01.02, name: Ethics Committee Favourable Opinion, zone: "04", level: SITE, expected_at: EC_APPROVED, arrival_weeks: {mean: 1.5, sd: 0.8}, missing_probability: 0.01}
+  - {artifact: 04.01.03, name: Ethics Committee Composition, zone: "04", level: SITE, expected_at: EC_APPROVED, arrival_weeks: {mean: 3.5, sd: 2.5}, missing_probability: 0.09}
+  - {artifact: 04.02.01, name: Approved Informed Consent Form, zone: "04", level: SITE, expected_at: EC_APPROVED, arrival_weeks: {mean: 2.0, sd: 1.0}, missing_probability: 0.02}
+
+  # Zone 05 — Site Management. This is where a TMF usually loses its percentage.
+  - {artifact: 05.01.01, name: Site Feasibility Questionnaire, zone: "05", level: SITE, expected_at: FEASIBILITY_COMPLETE, arrival_weeks: {mean: 1.5, sd: 0.8}, missing_probability: 0.03}
+  - {artifact: 05.02.01, name: Confidentiality Agreement, zone: "05", level: SITE, expected_at: CDA_EXECUTED, arrival_weeks: {mean: 1.0, sd: 0.5}, missing_probability: 0.01}
+  - {artifact: 05.03.01, name: Clinical Trial Agreement, zone: "05", level: SITE, expected_at: CONTRACT_EXECUTED, arrival_weeks: {mean: 1.5, sd: 1.0}, missing_probability: 0.01}
+  - {artifact: 05.04.01, name: Principal Investigator Curriculum Vitae, zone: "05", level: SITE, expected_at: GREEN_LIGHT, arrival_weeks: {mean: 2.5, sd: 2.0}, missing_probability: 0.07}
+  - {artifact: 05.04.02, name: Site Staff Curriculum Vitae, zone: "05", level: SITE, expected_at: GREEN_LIGHT, arrival_weeks: {mean: 4.0, sd: 3.0}, missing_probability: 0.16}
+  - {artifact: 05.04.03, name: GCP Training Certificate, zone: "05", level: SITE, expected_at: GREEN_LIGHT, arrival_weeks: {mean: 3.5, sd: 2.5}, missing_probability: 0.13}
+  - {artifact: 05.04.04, name: Delegation of Authority Log, zone: "05", level: SITE, expected_at: SITE_INITIATION_VISIT, arrival_weeks: {mean: 2.0, sd: 1.5}, missing_probability: 0.08}
+  - {artifact: 05.05.01, name: Financial Disclosure Form, zone: "05", level: SITE, expected_at: GREEN_LIGHT, arrival_weeks: {mean: 4.5, sd: 3.0}, missing_probability: 0.18}
+  - {artifact: 05.06.01, name: Site Visit Report, zone: "05", level: MONITORING_VISIT, arrival_weeks: {mean: 2.5, sd: 1.5}, missing_probability: 0.05}
+
+  # Zone 06 — IP and Trial Supplies
+  - {artifact: 06.01.01, name: Pharmacy Manual, zone: "06", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 3.0, sd: 1.5}, missing_probability: 0.00}
+  - {artifact: 06.03.01, name: Investigational Product Accountability Log, zone: "06", level: SITE, expected_at: END_OF_STUDY, arrival_weeks: {mean: 3.0, sd: 2.0}, missing_probability: 0.10}
+  - {artifact: 06.04.01, name: Storage Temperature Records, zone: "06", level: SITE, expected_at: END_OF_STUDY, arrival_weeks: {mean: 3.5, sd: 2.5}, missing_probability: 0.14}
+
+  # Zone 08 — Central and Local Testing. Oncology-specific.
+  - {artifact: 08.01.01, name: Central Laboratory Manual, zone: "08", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 2.5, sd: 1.2}, missing_probability: 0.00}
+  - {artifact: 08.01.02, name: Biomarker Sample Handling Manual, zone: "08", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 3.0, sd: 1.5}, missing_probability: 0.02}
+  - {artifact: 08.02.01, name: Imaging Charter, zone: "08", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 4.0, sd: 2.0}, missing_probability: 0.02}
+  - {artifact: 08.02.02, name: Blinded Independent Central Review Charter, zone: "08", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 4.5, sd: 2.0}, missing_probability: 0.03}
+  - {artifact: 08.03.01, name: Local Laboratory Certification, zone: "08", level: SITE, expected_at: GREEN_LIGHT, arrival_weeks: {mean: 3.0, sd: 2.0}, missing_probability: 0.12}
+
+  # Zone 10 — Data Management
+  - {artifact: 10.01.01, name: Data Management Plan, zone: "10", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 4.0, sd: 2.0}, missing_probability: 0.01}
+  - {artifact: 10.02.01, name: Annotated Case Report Form, zone: "10", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 3.0, sd: 1.5}, missing_probability: 0.02}
+  - {artifact: 10.03.01, name: Edit Check Specification, zone: "10", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 3.5, sd: 1.8}, missing_probability: 0.03}
+  - {artifact: 10.06.01, name: Database Lock Certificate, zone: "10", level: TRIAL, expected_at: DATABASE_LOCK, arrival_weeks: {mean: 1.0, sd: 0.5}, missing_probability: 0.00}
+
+  # Zone 11 — Statistics
+  - {artifact: 11.01.01, name: Statistical Analysis Plan, zone: "11", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 5.0, sd: 2.0}, missing_probability: 0.00}
+  - {artifact: 11.02.01, name: Randomisation Specification, zone: "11", level: TRIAL, expected_at: STUDY_START, arrival_weeks: {mean: 2.5, sd: 1.2}, missing_probability: 0.01}
+  - {artifact: 11.04.01, name: Tables Listings and Figures Specification, zone: "11", level: TRIAL, expected_at: DATABASE_LOCK, arrival_weeks: {mean: 3.0, sd: 1.5}, missing_probability: 0.04}
+
+# A document filed more than this many weeks after it became expected is late.
+# Timeliness is the metric an inspection readiness review actually looks at,
+# because a complete TMF assembled the week before an inspection is not a TMF.
+timeliness_target_weeks: 4.0
+
+# Some documents are superseded rather than simply filed once.
+version_probability: 0.22
