@@ -1,0 +1,140 @@
+# The lesion model and RECIST 1.1 derivation.
+#
+# This is the clinical domain's equivalent of methods.yaml: it declares the TRUE
+# behaviour of a subject's disease, and the engine then observes that truth
+# through a radiologist's measurement error. Response is never declared. It is
+# arithmetic over measured lesion diameters, computed by the same rules twice --
+# once for the investigator's read and once for blinded independent central
+# review -- so the discordance between them is a consequence of two readers
+# measuring the same lesions, not a configured rate.
+#
+# Every threshold below is from RECIST 1.1 (Eisenhauer et al., Eur J Cancer 2009;
+# 45:228-247). They are declared rather than hard-coded so that a study using
+# iRECIST, or a modified threshold, is a config change.
+
+recist:
+  version: "1.1"
+  # Measurability at baseline.
+  measurable_min_mm: 10.0
+  nodal_measurable_min_mm: 15.0        # short axis
+  nodal_normal_max_mm: 10.0            # short axis below which a node is normal
+  max_target_lesions: 5
+  max_target_per_organ: 2
+  # Response thresholds. PR is measured against BASELINE; PD against the NADIR,
+  # which is the smallest sum recorded so far including baseline. Getting that
+  # asymmetry wrong is the single most common RECIST implementation error.
+  partial_response_decrease: 0.30
+  progression_increase: 0.20
+  progression_min_absolute_mm: 5.0
+  # A randomised trial with PFS as primary endpoint does not require response to
+  # be confirmed at a later timepoint; a single-arm trial reporting ORR does.
+  confirmation_required: false
+  confirmation_min_weeks: 4.0
+  stable_disease_min_weeks: 6.0
+
+measurement:
+  # Radiology is reported to the millimetre. Quantisation is not a rounding
+  # detail: it is a real source of reader disagreement, because two readers whose
+  # underlying estimates differ by half a millimetre can report the same lesion
+  # 1 mm apart, and five target lesions compound that into the sum.
+  quantisation_mm: 1.0
+  # How reliably a reader prefers the larger lesion when choosing targets. At 1.0
+  # both readers always pick the same lesions and the only disagreement left is
+  # measurement noise; lower values let them diverge, as they do.
+  selection_size_preference: 0.55
+  # Whether the two readers agree that a new finding is malignant. A reader who
+  # calls it equivocal does not call progression.
+  new_lesion_concurrence: 0.82
+  # A lesion smaller than this is recorded as present but too small to measure,
+  # which is what a radiologist does rather than reporting 2 mm.
+  too_small_to_measure_mm: 5.0
+  readers:
+    # Inter-observer variability on a single lesion diameter is around 10% in
+    # published reader studies. At the 5.5% first used here, the two readers
+    # agreed on 96.5% of timepoints; real trials report 85-90%.
+    - {reader_id: INV, role: INVESTIGATOR, bias: 0.000, cv: 0.095}
+    # Central review is a dedicated reader working to a charter, so it is tighter
+    # and very slightly conservative. This is why BICR-assessed PFS usually runs
+    # a little longer than investigator-assessed PFS in the same trial.
+    - {reader_id: BICR, role: INDEPENDENT, bias: -0.015, cv: 0.072}
+
+# Where disease sits, and whether those sites are nodal. Weights are the relative
+# chance of a lesion being in that organ, for previously untreated metastatic
+# non-squamous NSCLC.
+organs:
+  - {organ: LUNG, weight: 0.34, nodal: false}
+  - {organ: LYMPH_NODE, weight: 0.26, nodal: true}
+  - {organ: LIVER, weight: 0.16, nodal: false}
+  - {organ: BONE, weight: 0.11, nodal: false}
+  - {organ: ADRENAL, weight: 0.08, nodal: false}
+  - {organ: BRAIN, weight: 0.05, nodal: false}
+
+baseline:
+  # How many measurable lesions the subject actually HAS. Each reader then picks
+  # their own target lesions from these, which is the point: a subject with eight
+  # measurable lesions and a five-lesion limit gives two readers real scope to
+  # follow different disease. Reader disagreement in practice comes far more from
+  # lesion selection than from measuring the same lesion differently.
+  measurable_lesion_count: {minimum: 1, maximum: 12, mode: 5}
+  target_lesion_count: {minimum: 1, maximum: 5, mode: 2}
+  non_target_lesion_count: {minimum: 0, maximum: 4, mode: 1}
+  # Log-normal, which is what tumour size distributions look like.
+  diameter_mm: {median: 24.0, log_sd: 0.55, minimum: 11.0, maximum: 92.0}
+  nodal_short_axis_mm: {median: 19.0, log_sd: 0.32, minimum: 15.0, maximum: 46.0}
+
+# Biexponential tumour growth inhibition. A sensitive fraction shrinks under
+# treatment while a resistant fraction grows:
+#
+#     d(t) = d0 * [ p * exp(-ks * t) + (1 - p) * exp(kg * t) ]
+#
+# One equation gives the whole range of real trajectories. High p with a good ks
+# is a responder; low p is progression on treatment; intermediate p produces the
+# shrink-then-regrow curve that acquired resistance actually looks like. Response
+# rate and PFS are consequences of these three parameters, not separate settings.
+growth:
+  arms:
+    ARM-A:
+      sensitive_fraction: {mean: 0.72, sd: 0.22}
+      shrinkage_rate_per_week: {mean: 0.055, sd: 0.019}
+      growth_rate_per_week: {mean: 0.018, sd: 0.007}
+    # Chemotherapy alone shrinks tumours -- a doublet gives roughly a quarter to
+    # a third of patients a partial response. The first parameters here had the
+    # resistant fraction outrunning the sensitive one from week zero, so the mean
+    # trajectory never fell below baseline and the arm returned a 2.5% response
+    # rate. A control arm that cannot respond makes the whole comparison
+    # meaningless.
+    ARM-B:
+      sensitive_fraction: {mean: 0.66, sd: 0.24}
+      shrinkage_rate_per_week: {mean: 0.060, sd: 0.020}
+      growth_rate_per_week: {mean: 0.030, sd: 0.010}
+
+# A new lesion is unequivocal progression whatever the target sum is doing, so it
+# is a separate hazard rather than a consequence of the sum. It rises with
+# disease burden, which is why a subject whose targets are regrowing is also the
+# one who develops new disease.
+new_lesion:
+  base_hazard_per_week: 0.0055
+  burden_exponent: 1.4
+
+# Unequivocal progression of non-target disease, likewise.
+non_target_progression:
+  base_hazard_per_week: 0.0028
+  burden_exponent: 1.2
+
+# Death from any cause is a PFS event. Hazard rises steeply with burden.
+death:
+  base_hazard_per_week: 0.0016
+  burden_exponent: 2.0
+
+# Tumour assessment runs on the CALENDAR from randomisation, not on the dosing
+# schedule. That decoupling is specific to oncology and it is what puts
+# assessments out of window when a cycle is delayed.
+assessment_schedule:
+  first_week: 6.0
+  interval_weeks: 6.0
+  switch_week: 48.0
+  later_interval_weeks: 9.0
+  window_days: 7.0
+  # Scans slip. Most stay in window; some do not, and a few never happen.
+  slip_days_sd: 3.2
+  missed_probability: 0.045

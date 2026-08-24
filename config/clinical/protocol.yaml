@@ -1,0 +1,45 @@
+# Study NVR-101-201.
+#
+# A randomised, double-blind, placebo-controlled Phase II study of Nelvorasib in
+# combination with platinum-doublet chemotherapy in previously untreated advanced
+# non-squamous NSCLC harbouring KRAS G12C.
+#
+# Fictional study, fictional investigational product. The chemotherapy backbone
+# is named with the real generics a protocol of this shape would use, because an
+# invented chemotherapy regimen would read as fake immediately.
+
+study_id: NVR-101-201
+title: >-
+  A Phase II randomised, double-blind, placebo-controlled study of Nelvorasib
+  plus carboplatin and pemetrexed in previously untreated advanced non-squamous
+  NSCLC harbouring KRAS G12C
+phase: "2"
+indication: Advanced non-squamous non-small cell lung cancer, KRAS G12C
+blinding: DOUBLE_BLIND
+cycle_length_days: 21
+
+# Randomisation is 2:1. Arm labels stay blinded in the operational data; the
+# treatment each subject actually received is only resolvable after unblinding.
+arms:
+  - {arm_id: ARM-A, label: "Nelvorasib 240 mg QD + carboplatin AUC5 + pemetrexed 500 mg/m2", allocation: 2, subjects: 80}
+  - {arm_id: ARM-B, label: "Placebo + carboplatin AUC5 + pemetrexed 500 mg/m2", allocation: 1, subjects: 40}
+
+endpoints:
+  primary:
+    - {endpoint_id: PFS, label: Progression-free survival by RECIST 1.1 per blinded independent central review, evaluator: BICR}
+  secondary:
+    - {endpoint_id: ORR, label: Objective response rate, evaluator: BICR}
+    - {endpoint_id: DOR, label: Duration of response, evaluator: BICR}
+    - {endpoint_id: PFS_INV, label: Progression-free survival by investigator assessment, evaluator: INV}
+
+enrolment:
+  first_subject_in: 2026-03-16
+  # Accrual runs about fourteen months, so the last subject enrolled has far less
+  # follow-up than the first. That imbalance is what censoring is for.
+  accrual_weeks: 62.0
+
+analysis:
+  # Data cut-off, measured in weeks from the first subject randomised.
+  cutoff_weeks_from_fsi: 130.0
+  # Follow-up horizon simulated per subject.
+  horizon_weeks: 156.0
