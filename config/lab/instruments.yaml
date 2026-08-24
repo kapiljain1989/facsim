@@ -1,0 +1,87 @@
+# Instruments, and the chromatography data system each one is bound to.
+#
+# Every instrument carries its own systematic bias and its own precision. That is
+# what makes intermediate precision a real number: the same sample measured on
+# HPLC-02 by a different analyst on a different day does not reproduce the
+# repeatability figure, because three independent bias terms have moved.
+
+instruments:
+  - instrument_id: INS-HPLC-01
+    name: HPLC-01
+    instrument_class: HPLC
+    vendor: Waters
+    model: Arc HPLC with 2998 PDA
+    cds: EMPOWER
+    cds_project: NVR-101-AD
+    location: LAB-AD-01
+    qualification:
+      status: QUALIFIED
+      iq_oq_date: 2025-07-14
+      pq_date: 2025-07-18
+      requalification_interval_days: 365
+    calibration:
+      interval_days: 180
+      last_calibrated: 2026-01-09
+      # Detector response drifts between calibrations; a validation run late in
+      # the interval sits on a slightly different response factor.
+      response_drift_per_day: 0.000045
+    bias: -0.0020
+    precision_rsd: 0.0028
+
+  - instrument_id: INS-HPLC-02
+    name: HPLC-02
+    instrument_class: HPLC
+    vendor: Waters
+    model: Arc HPLC with 2998 PDA
+    cds: EMPOWER
+    cds_project: NVR-101-AD
+    location: LAB-AD-01
+    qualification:
+      status: QUALIFIED
+      iq_oq_date: 2025-03-02
+      pq_date: 2025-03-06
+      requalification_interval_days: 365
+    calibration:
+      interval_days: 180
+      last_calibrated: 2025-12-02
+      response_drift_per_day: 0.000060
+    bias: 0.0031
+    precision_rsd: 0.0034
+
+  - instrument_id: INS-HPLC-03
+    name: HPLC-03
+    instrument_class: HPLC_CHIRAL
+    vendor: Thermo Fisher
+    model: Vanquish Core with VC-D11 detector
+    cds: CHROMELEON
+    cds_project: NVR-101-CHIRAL
+    location: LAB-AD-02
+    qualification:
+      status: QUALIFIED
+      iq_oq_date: 2025-09-22
+      pq_date: 2025-09-25
+      requalification_interval_days: 365
+    calibration:
+      interval_days: 180
+      last_calibrated: 2026-02-11
+      response_drift_per_day: 0.000038
+    bias: 0.0012
+    precision_rsd: 0.0031
+
+columns:
+  - {column_id: COL-0007, column_type_id: COL-C18, serial: 02251837A, installed: 2026-01-12, injections_at_start: 0}
+  - {column_id: COL-0008, column_type_id: COL-C18, serial: 02251902B, installed: 2026-01-12, injections_at_start: 640}
+  - {column_id: COL-0011, column_type_id: COL-AMYLOSE, serial: CH-77401, installed: 2026-02-02, injections_at_start: 0}
+
+analysts:
+  # Bias and precision per analyst. The junior analyst is not worse at the
+  # chemistry, but has a wider spread on sample preparation, which is what
+  # intermediate precision is designed to expose.
+  - {analyst_id: ANL-01, name: S. Kulkarni, grade: SENIOR, bias: -0.0012, precision_rsd: 0.0026}
+  - {analyst_id: ANL-02, name: D. Fernandes, grade: SENIOR, bias: 0.0018, precision_rsd: 0.0029}
+  - {analyst_id: ANL-03, name: T. Okonkwo, grade: JUNIOR, bias: 0.0041, precision_rsd: 0.0052}
+
+reference_standards:
+  - {standard_id: STD-NVR-004, substance_id: SUB-0001, purity_percent: 99.62, lot: RS-2025-114, expiry: 2027-06-30}
+  - {standard_id: STD-NVR-IMP-A, substance_id: SUB-0002, purity_percent: 97.80, lot: RS-2025-118, expiry: 2027-03-31}
+  - {standard_id: STD-NVR-IMP-C, substance_id: SUB-0004, purity_percent: 98.45, lot: RS-2025-121, expiry: 2027-03-31}

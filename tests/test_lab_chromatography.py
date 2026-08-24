@@ -240,3 +240,75 @@ class TestReproducibility:
         first = _trace(TestRealisticRun.PEAKS, noise=3.0, seed=7)[1]
         second = _trace(TestRealisticRun.PEAKS, noise=3.0, seed=8)[1]
         assert first != second
+
+
+class TestInvariantsFromRealBugs:
+    """Each of these failed at some point during development.
+
+    They are the properties that matter most for a chromatography dataset, and
+    all four were violated by code that looked reasonable.
+    """
+
+    @pytest.mark.parametrize(
+        "separation", [0.80, 0.60, 0.50, 0.40, 0.30, 0.25, 0.22, 0.20, 0.15, 0.10, 0.05, 0.02]
+    )
+    def test_area_is_conserved_at_every_degree_of_overlap(self, separation):
+        """No area invented, and very little lost, however fused the pair is.
+
+        Two earlier versions failed this. One dropped a badly fused doublet
+        entirely, because the valley sat above half height and both halves failed
+        the width test — the region's whole area vanished. The next reported the
+        measurable half and silently discarded the other, which is worse: it
+        looks like a clean result and surfaces later as an unexplained mass
+        balance failure.
+        """
+        truth = 40_000.0 + 50_000.0
+        peaks = [
+            PeakSpec("imp", RT - separation, SIGMA, 0.03, 40_000.0),
+            PeakSpec("main", RT, SIGMA, 0.03, 50_000.0),
+        ]
+        times, response = _trace(peaks, noise=2.0, drift=0.3)
+        found = integrate(times, response)
+        assert found, "a region above the threshold must yield at least one peak"
+        recovered = sum(peak.area for peak in found) / truth
+        assert 0.90 <= recovered <= 1.001, f"recovered {recovered:.3%}"
+
+    def test_detection_does_not_scale_with_the_tallest_peak(self):
+        """A 0.05% impurity beside a 100% main peak must still be found.
+
+        The threshold once had a floor proportional to the trace's span, which
+        looks harmless until the trace has real dynamic range. At 2000:1 it hid
+        every impurity the method exists to measure.
+        """
+        main_area = 50_000.0
+        impurity_area = main_area * 0.0005
+        peaks = [
+            PeakSpec("imp", 6.00, SIGMA, 0.03, impurity_area),
+            PeakSpec("main", RT, SIGMA, 0.03, main_area),
+        ]
+        times, response = _trace(peaks, noise=2.0, drift=0.3)
+        found = integrate(times, response)
+        assert len(found) == 2
+        small = min(found, key=lambda peak: peak.area)
+        assert small.area == pytest.approx(impurity_area, rel=0.25)
+
+    def test_no_phantom_peaks_on_the_flanks_of_a_tall_one(self):
+        """Noise on a peak's flank produces local maxima above any absolute
+        threshold. Only a prominence test rejects them."""
+        times, response = _trace([PeakSpec("main", RT, SIGMA, 0.03, 500_000.0)], noise=6.5)
+        found = integrate(times, response)
+        assert len(found) == 1
+
+    def test_no_peak_is_reported_twice(self):
+        """Widening two adjacent regions can make them overlap; without merging
+        them, an apex inside both is integrated twice."""
+        peaks = (
+            PeakSpec("a", 4.18, 0.050, 0.020, 900.0),
+            PeakSpec("b", 4.55, 0.052, 0.022, 700.0),
+            PeakSpec("c", 8.52, 0.060, 0.030, 50_000.0),
+            PeakSpec("d", 12.40, 0.080, 0.050, 300.0),
+        )
+        times, response = _trace(peaks, noise=6.5, drift=11.0, wander=24.0)
+        found = integrate(times, response)
+        retentions = [round(peak.retention_time_min, 4) for peak in found]
+        assert len(retentions) == len(set(retentions)), f"duplicates in {retentions}"

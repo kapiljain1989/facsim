@@ -421,10 +421,17 @@ def integrate(
     #: Peak-to-peak noise, the quantity USP signal-to-noise is defined against.
     noise_pp = 6.0 * sigma
 
-    span = max(response) - min(response)
-    # A floor relative to the trace itself, so a noise-free synthetic trace does
-    # not drive the threshold to zero and turn float dust into peaks.
-    threshold = max(noise_multiple * sigma, span * 1.0e-3, 1.0e-12)
+    # Threshold is set by the NOISE, never by the tallest peak. A span-relative
+    # floor looks harmless until the trace has real dynamic range: a related
+    # substances method puts a 0.05% impurity next to a 100% main peak, a ratio
+    # of 2000:1, and a floor at a thousandth of the span would silently hide
+    # every impurity the method exists to measure.
+    if sigma > 0.0:
+        threshold = noise_multiple * sigma
+    else:
+        # Only a synthetic noise-free trace reaches here, where the floor is
+        # about not mistaking floating-point dust for a peak.
+        threshold = max((max(response) - min(response)) * 1.0e-4, 1.0e-12)
 
     detection_window = max(min_width_points * 4, count // 20)
     rough = _opened_baseline(response, detection_window)
@@ -444,20 +451,40 @@ def integrate(
     if start is not None and count - start >= min_width_points:
         regions.append((start, count - 1))
 
-    peaks: list[IntegratedPeak] = []
+    # Widen each region to where the signal genuinely returns to the rough
+    # baseline, so a tail is integrated rather than clipped at the threshold
+    # crossing -- then merge any regions that widening has made overlap.
+    # Without the merge, an apex sitting inside two overlapping regions is
+    # integrated twice and reported as two identical peaks.
+    edge = threshold * 0.05
+    widened: list[list[int]] = []
     for left, right in regions:
-        # Widen to where the signal genuinely returns to the rough baseline, so
-        # the tail is integrated rather than clipped at the threshold crossing.
-        edge = threshold * 0.05
         while left > 0 and detect[left - 1] > edge:
             left -= 1
         while right < count - 1 and detect[right + 1] > edge:
             right += 1
         if right - left < min_width_points:
             continue
+        if widened and left <= widened[-1][1]:
+            widened[-1][1] = max(widened[-1][1], right)
+        else:
+            widened.append([left, right])
+
+    peaks: list[IntegratedPeak] = []
+    for left, right in widened:
 
         # Baseline drop: a straight line under this region only.
-        y0, y1 = response[left], response[right]
+        #
+        # Each endpoint is the mean of a short window rather than the single
+        # point at the crossing. One point carries the full detector noise, and
+        # since the baseline is subtracted across the whole peak that noise lands
+        # directly in the area. Averaging n points divides it by sqrt(n), which
+        # is what dominates precision for a peak near the limit of
+        # quantitation -- and it is what a data system does when it takes a
+        # baseline over a window.
+        anchor = max(1, min(min_width_points, (right - left) // 4))
+        y0 = sum(response[left : left + anchor]) / anchor
+        y1 = sum(response[right - anchor + 1 : right + 1]) / anchor
         run = float(right - left)
         corrected = [0.0] * count
         for index in range(left, right + 1):
@@ -479,15 +506,25 @@ def integrate(
         if not apices:
             apices = [max(range(left, right + 1), key=lambda i: corrected[i])]
 
-        # Merge apices that belong to one crest: adjacent maxima with no real
-        # valley between them, or maxima too close to be resolved at all.
+        # Merge apices that belong to one crest. Splitting is the exception, and
+        # it needs three things to be true: the maxima are far enough apart to be
+        # resolved at all, the valley between them is a real valley rather than a
+        # dip in the noise, and BOTH sides rise clear of that valley.
+        #
+        # The last condition has to be tested here rather than after the peaks
+        # are measured. Rejecting an unprominent peak at the end would throw away
+        # both halves of a fused doublet and report nothing at all, when what the
+        # trace holds is one peak.
         kept: list[int] = []
         for apex in apices:
             if kept:
                 previous = kept[-1]
                 valley = min(corrected[previous : apex + 1])
                 lower = min(corrected[previous], corrected[apex])
-                if apex - previous < min_width_points or valley > valley_ratio * lower:
+                too_close = apex - previous < min_width_points
+                shallow = valley > valley_ratio * lower
+                unprominent = (lower - valley) < threshold
+                if too_close or shallow or unprominent:
                     if corrected[apex] > corrected[previous]:
                         kept[-1] = apex
                     continue
@@ -506,12 +543,57 @@ def integrate(
                 )
             bounds.append((sub_left, apex, sub_right))
 
+        accepted: list[IntegratedPeak] = []
+        rejected = 0
         for sub_left, apex, sub_right in bounds:
             if sub_right - sub_left < min_width_points:
+                rejected += 1
                 continue
-            peaks.append(
-                _descriptors(times, corrected, sub_left, apex, sub_right, noise_pp)
-            )
+
+            # Prominence, not absolute height. Noise riding on the flank of a
+            # tall peak produces local maxima that clear an absolute threshold
+            # easily, and reporting them would put phantom peaks either side of
+            # every large one. What distinguishes a real peak is that it rises
+            # clear of BOTH the valleys bounding it.
+            shoulder = max(corrected[sub_left], corrected[sub_right])
+            if corrected[apex] - shoulder < threshold:
+                rejected += 1
+                continue
+
+            candidate = _descriptors(times, corrected, sub_left, apex, sub_right, noise_pp)
+
+            # A peak with no measurable width at half height is not a peak; nor
+            # is one whose integrated area came out at or below zero.
+            if candidate.width_half_min <= 0.0 or candidate.area <= 0.0:
+                rejected += 1
+                continue
+            accepted.append(candidate)
+
+        # Area conservation. A region that rose above the threshold contains
+        # something, and whatever it contains has to end up in exactly one
+        # reported peak.
+        #
+        # Two ways that can fail without this. If every sub-peak is rejected --
+        # a badly fused doublet whose valley sits above half height fails the
+        # width test on both halves -- the region vanishes entirely. If only
+        # SOME are rejected, the region reports the accepted ones and quietly
+        # drops the rest of the area, which is worse: it looks like a clean
+        # result and shows up as an unexplained mass balance failure.
+        #
+        # Either way the region is re-integrated as a single peak. The trade-off
+        # is that a genuine three-peak cluster with one unmeasurable member
+        # collapses to one peak rather than reporting the two good ones. That is
+        # the right way round: a cluster nobody can measure cleanly is a cluster
+        # an analyst would report as fewer peaks, and no area is invented or lost.
+        if rejected or not accepted:
+            whole = max(range(left, right + 1), key=lambda index: corrected[index])
+            fallback = _descriptors(times, corrected, left, whole, right, noise_pp)
+            if fallback.area > 0.0:
+                # Replaces the partial set rather than adding to it: appending
+                # would report the region's area twice.
+                accepted = [fallback]
+
+        peaks.extend(accepted)
 
     peaks.sort(key=lambda peak: peak.retention_time_min)
 

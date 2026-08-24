@@ -1,0 +1,235 @@
+# Analytical methods.
+#
+# Each method declares the TRUE chromatographic behaviour of every analyte, and
+# how that behaviour responds to the operating conditions. The engine observes
+# that truth through injection, instrument and column noise — it never reads the
+# truth into a result directly. This is what makes a robustness study mean
+# something: the resolution reported at +2% organic is measured from a trace that
+# genuinely has less separation in it.
+#
+# `retention_sensitivity` is fractional change per unit deviation from the
+# reference condition, except `flow_rate_ml_min`, which is an exponent because
+# retention is inversely proportional to flow. Selectivity emerges from analytes
+# having DIFFERENT coefficients: NVR and NVR-C converge as organic rises, which
+# is exactly why the critical pair is the method's weak point.
+
+methods:
+  - method_id: MTH-0001
+    name: Nelvorasib assay and related substances
+    purpose: ASSAY_AND_IMPURITIES
+    technique: HPLC_UV
+    cds: EMPOWER
+    matrix: DRUG_PRODUCT
+    column:
+      column_type_id: COL-C18
+      description: C18, 150 x 4.6 mm, 3.5 um
+      expected_lifetime_injections: 1200
+    nominal_conditions:
+      flow_rate_ml_min: 1.0
+      column_temperature_c: 35.0
+      organic_percent: 45.0
+      mobile_phase_ph: 3.0
+      detection_nm: 254.0
+      injection_volume_ul: 10.0
+    run_time_min: 15.0
+    sampling_hz: 5.0
+    # Nominal working concentration of the assay standard, and the units every
+    # response_factor below is expressed against.
+    standard_concentration_ug_ml: 500.0
+    detector:
+      noise_sigma: 6.5
+      baseline_offset: 12.0
+      baseline_drift_per_min: 11.0
+      baseline_wander: 24.0
+      baseline_wander_cycles: 1.5
+    # Injection-to-injection and preparation variability. These are what the
+    # validated repeatability and intermediate precision emerge FROM, rather
+    # than being declared as an outcome.
+    variability:
+      sample_preparation_rsd: 0.0040
+      injection_rsd: 0.0030
+      retention_jitter_min: 0.0040
+      analyst_bias_sd: 0.0035
+      day_bias_sd: 0.0030
+    critical_pair: [SUB-0004, SUB-0001]
+    analytes:
+      - analyte_id: SUB-0001
+        peak_name: Nelvorasib
+        role: ASSAY
+        retention_time_min: 8.52
+        sigma_min: 0.060
+        tau_min: 0.030
+        response_factor: 100.0
+        specification_percent: null
+        retention_sensitivity:
+          flow_rate_ml_min: -1.000
+          column_temperature_c: -0.0120
+          organic_percent: -0.0550
+          mobile_phase_ph: 0.0400
+        efficiency_sensitivity:
+          column_temperature_c: -0.0080
+          flow_rate_ml_min: 0.1500
+        tailing_sensitivity:
+          mobile_phase_ph: 0.3500
+
+      - analyte_id: SUB-0002
+        peak_name: Nelvorasib hydroxypropanamide
+        role: DEGRADANT
+        retention_time_min: 4.18
+        sigma_min: 0.050
+        tau_min: 0.022
+        response_factor: 118.0
+        specification_percent: 0.30
+        retention_sensitivity:
+          flow_rate_ml_min: -1.000
+          column_temperature_c: -0.0135
+          organic_percent: -0.0700
+          mobile_phase_ph: 0.0100
+        efficiency_sensitivity:
+          column_temperature_c: -0.0080
+          flow_rate_ml_min: 0.1500
+        tailing_sensitivity:
+          mobile_phase_ph: 0.1200
+
+      - analyte_id: SUB-0003
+        peak_name: Nelvorasib N-oxide
+        role: DEGRADANT
+        retention_time_min: 5.83
+        sigma_min: 0.055
+        tau_min: 0.025
+        response_factor: 94.0
+        specification_percent: 0.30
+        retention_sensitivity:
+          flow_rate_ml_min: -1.000
+          column_temperature_c: -0.0125
+          organic_percent: -0.0620
+          mobile_phase_ph: 0.0250
+        efficiency_sensitivity:
+          column_temperature_c: -0.0080
+          flow_rate_ml_min: 0.1500
+        tailing_sensitivity:
+          mobile_phase_ph: 0.2000
+
+      # The critical pair partner. Its organic-percent coefficient is
+      # deliberately shallower than the main peak's, so the two converge as
+      # organic rises and the pair fails resolution before anything else does.
+      - analyte_id: SUB-0004
+        peak_name: des-fluoro Nelvorasib
+        role: PROCESS_IMPURITY
+        retention_time_min: 7.95
+        sigma_min: 0.060
+        tau_min: 0.028
+        response_factor: 105.0
+        specification_percent: 0.15
+        retention_sensitivity:
+          flow_rate_ml_min: -1.000
+          column_temperature_c: -0.0105
+          organic_percent: -0.0400
+          mobile_phase_ph: 0.0380
+        efficiency_sensitivity:
+          column_temperature_c: -0.0080
+          flow_rate_ml_min: 0.1500
+        tailing_sensitivity:
+          mobile_phase_ph: 0.3300
+
+      - analyte_id: SUB-0005
+        peak_name: Nelvorasib dimer
+        role: DEGRADANT
+        retention_time_min: 12.40
+        sigma_min: 0.080
+        tau_min: 0.050
+        response_factor: 62.0
+        specification_percent: 0.20
+        retention_sensitivity:
+          flow_rate_ml_min: -1.000
+          column_temperature_c: -0.0150
+          organic_percent: -0.0480
+          mobile_phase_ph: 0.0150
+        efficiency_sensitivity:
+          column_temperature_c: -0.0080
+          flow_rate_ml_min: 0.1500
+        tailing_sensitivity:
+          mobile_phase_ph: 0.1800
+
+    column_ageing:
+      # Per injection on the column. A 1200-injection lifetime therefore ends at
+      # roughly +18% peak width, +30% tailing and -2.4% retention, which is when
+      # system suitability starts failing and the column is replaced.
+      sigma_per_injection: 0.00015
+      tau_per_injection: 0.00025
+      retention_per_injection: -0.00002
+
+  - method_id: MTH-0002
+    name: Nelvorasib atropisomer purity
+    purpose: CHIRAL_PURITY
+    technique: HPLC_CHIRAL
+    cds: CHROMELEON
+    matrix: DRUG_SUBSTANCE
+    column:
+      column_type_id: COL-AMYLOSE
+      description: Amylose tris(3,5-dimethylphenylcarbamate), 250 x 4.6 mm, 5 um
+      expected_lifetime_injections: 600
+    nominal_conditions:
+      flow_rate_ml_min: 1.2
+      column_temperature_c: 25.0
+      organic_percent: 15.0
+      mobile_phase_ph: 7.0
+      detection_nm: 265.0
+      injection_volume_ul: 5.0
+    run_time_min: 20.0
+    sampling_hz: 5.0
+    standard_concentration_ug_ml: 250.0
+    detector:
+      noise_sigma: 4.0
+      baseline_offset: 8.0
+      baseline_drift_per_min: 3.0
+      baseline_wander: 9.0
+      baseline_wander_cycles: 1.0
+    variability:
+      sample_preparation_rsd: 0.0045
+      injection_rsd: 0.0030
+      retention_jitter_min: 0.0060
+      analyst_bias_sd: 0.0040
+      day_bias_sd: 0.0035
+    critical_pair: [SUB-0001, SUB-0006]
+    analytes:
+      - analyte_id: SUB-0001
+        peak_name: (aR)-Nelvorasib
+        role: ASSAY
+        retention_time_min: 11.20
+        sigma_min: 0.110
+        tau_min: 0.045
+        response_factor: 100.0
+        specification_percent: null
+        retention_sensitivity:
+          flow_rate_ml_min: -1.000
+          column_temperature_c: -0.0180
+          organic_percent: -0.0900
+          mobile_phase_ph: 0.0
+        efficiency_sensitivity:
+          column_temperature_c: -0.0040
+          flow_rate_ml_min: 0.2000
+        tailing_sensitivity: {}
+
+      - analyte_id: SUB-0006
+        peak_name: (aS)-Nelvorasib
+        role: ATROPISOMER
+        retention_time_min: 13.60
+        sigma_min: 0.125
+        tau_min: 0.050
+        response_factor: 100.0
+        specification_percent: 0.50
+        retention_sensitivity:
+          flow_rate_ml_min: -1.000
+          column_temperature_c: -0.0230
+          organic_percent: -0.1050
+          mobile_phase_ph: 0.0
+        efficiency_sensitivity:
+          column_temperature_c: -0.0040
+          flow_rate_ml_min: 0.2000
+        tailing_sensitivity: {}
+
+    column_ageing:
+      sigma_per_injection: 0.00030
+      tau_per_injection: 0.00040
+      retention_per_injection: -0.00004

@@ -1,0 +1,116 @@
+# Substances: the drug substance, its related substances, and the excipients the
+# drug product is built from.
+#
+# Nelvorasib is a FICTIONAL molecule. The name conforms to the WHO INN stem
+# `-rasib`, used for KRAS inhibitors, so that it reads correctly to a domain
+# reader without colliding with a real product. Every number here is invented.
+#
+# Properties declared here are read downstream: the pH-solubility profile drives
+# multi-media dissolution, the degradation pathways decide which peaks appear in
+# a forced-degradation chromatogram, and the atropisomer axis is why a chiral
+# method exists at all.
+
+substances:
+  - substance_id: SUB-0001
+    code: NVR-101
+    name: Nelvorasib
+    substance_class: DRUG_SUBSTANCE
+    modality: SMALL_MOLECULE
+    mechanism: Covalent KRAS G12C inhibitor
+    molecular_weight: 561.6
+    molecular_formula: C30H32ClFN6O3
+    # Weak base. Protonated and freely soluble in the stomach, poorly soluble by
+    # the time it reaches the small intestine — the reason a food effect and a
+    # multi-media dissolution method both matter.
+    pka: [4.1, 9.6]
+    logp: 3.4
+    bcs_class: 2
+    ph_solubility_mg_ml:
+      - {ph: 1.2, solubility: 4.80}
+      - {ph: 2.0, solubility: 2.10}
+      - {ph: 4.5, solubility: 0.085}
+      - {ph: 6.8, solubility: 0.012}
+      - {ph: 7.4, solubility: 0.009}
+    hygroscopicity: SLIGHT
+    # Highly potent. Drives containment, dedicated equipment and cleaning limits
+    # derived from a health-based exposure limit rather than a dose fraction.
+    occupational_exposure_band: 4
+    permitted_daily_exposure_ug: 12.0
+    stereo:
+      # One configurational centre, plus a hindered biaryl axis. The axis is the
+      # interesting one: atropisomers of this class interconvert slowly enough to
+      # be isolable and must therefore be controlled as separate impurities.
+      stereocentres: 1
+      atropisomeric_axes: 1
+      atropisomer_interconversion_half_life_h_25c: 4100.0
+      atropisomer_interconversion_half_life_h_60c: 96.0
+    polymorphs:
+      - {form: I, nature: ANHYDRATE, relative_stability: 1.00, melting_point_c: 214.5, preferred: true}
+      - {form: II, nature: ANHYDRATE, relative_stability: 0.82, melting_point_c: 198.0, preferred: false}
+      - {form: H1, nature: MONOHYDRATE, relative_stability: 0.91, melting_point_c: 176.0, preferred: false}
+    degradation_pathways:
+      # The acrylamide warhead is the reactive handle that makes the inhibitor
+      # covalent; it is also the first thing to hydrolyse.
+      - {pathway: HYDROLYSIS_BASE, product: SUB-0002, relative_rate: 1.00}
+      - {pathway: HYDROLYSIS_ACID, product: SUB-0002, relative_rate: 0.22}
+      - {pathway: OXIDATION, product: SUB-0003, relative_rate: 0.64}
+      - {pathway: THERMAL, product: SUB-0005, relative_rate: 0.35}
+      - {pathway: PHOTOLYTIC, product: SUB-0003, relative_rate: 0.18}
+
+  - substance_id: SUB-0002
+    code: NVR-101-A
+    name: Nelvorasib hydroxypropanamide
+    substance_class: DEGRADANT
+    origin: Acrylamide hydrolysis of the covalent warhead
+    molecular_weight: 579.6
+    molecular_formula: C30H34ClFN6O4
+    parent: SUB-0001
+
+  - substance_id: SUB-0003
+    code: NVR-101-B
+    name: Nelvorasib N-oxide
+    substance_class: DEGRADANT
+    origin: Oxidation of the piperazine nitrogen
+    molecular_weight: 577.6
+    molecular_formula: C30H32ClFN6O4
+    parent: SUB-0001
+
+  - substance_id: SUB-0004
+    code: NVR-101-C
+    name: des-fluoro Nelvorasib
+    substance_class: PROCESS_IMPURITY
+    origin: Incomplete fluorination in step 4 of the route
+    molecular_weight: 543.6
+    molecular_formula: C30H33ClN6O3
+    parent: SUB-0001
+
+  - substance_id: SUB-0005
+    code: NVR-101-D
+    name: Nelvorasib dimer
+    substance_class: DEGRADANT
+    origin: Thermal Michael addition across two warheads
+    molecular_weight: 1123.2
+    molecular_formula: C60H64Cl2F2N12O6
+    parent: SUB-0001
+
+  - substance_id: SUB-0006
+    code: NVR-101-aS
+    name: (aS)-Nelvorasib
+    substance_class: ATROPISOMER
+    origin: Atropisomer about the biaryl axis; controlled, not a degradant
+    molecular_weight: 561.6
+    molecular_formula: C30H32ClFN6O3
+    parent: SUB-0001
+
+excipients:
+  - {excipient_id: EXC-MCC102, name: Microcrystalline Cellulose PH-102, function: FILLER}
+  - {excipient_id: EXC-MANN, name: Mannitol 200SD, function: FILLER}
+  - {excipient_id: EXC-CCS, name: Croscarmellose Sodium, function: DISINTEGRANT}
+  - {excipient_id: EXC-HPC, name: Hydroxypropyl Cellulose EXF, function: BINDER}
+  - {excipient_id: EXC-SLS, name: Sodium Lauryl Sulfate, function: WETTING_AGENT}
+  - {excipient_id: EXC-CSD, name: Colloidal Silicon Dioxide, function: GLIDANT}
+  - {excipient_id: EXC-MGST, name: Magnesium Stearate, function: LUBRICANT}
+  - {excipient_id: EXC-HPMCAS, name: HPMC Acetate Succinate MG, function: DISPERSION_POLYMER}
+  # Placebo appearance matching needs the coat and the colourant, nothing else.
+  - {excipient_id: EXC-COAT, name: Opadry II Beige 85F, function: FILM_COAT}
+  - {excipient_id: EXC-FEOX, name: Iron Oxide Yellow, function: COLOURANT}

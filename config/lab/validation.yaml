@@ -1,0 +1,106 @@
+# ICH Q2(R2) method validation design.
+#
+# The experiments, their levels and their acceptance criteria. The engine runs
+# each experiment as real injections through the method model and evaluates the
+# criteria against what it measured -- so a method can fail a criterion, and the
+# robustness study can discover which condition the method is actually sensitive
+# to rather than being told.
+
+validations:
+  - validation_id: VAL-0001
+    method_id: MTH-0001
+    protocol: VP-NVR-101-001
+    title: Validation of the assay and related substances method for Nelvorasib tablets
+    started: 2026-03-02
+    lead_analyst: ANL-01
+    instrument_id: INS-HPLC-01
+    column_id: COL-0007
+
+    experiments:
+      specificity:
+        # Blank, placebo, standard, sample, and the five stressed samples. The
+        # criterion is that nothing co-elutes with the analyte.
+        replicates: 2
+        stress_conditions:
+          - {condition: ACID, description: "0.1 M HCl, 60 C, 4 h", target_degradation_percent: 8.0}
+          - {condition: BASE, description: "0.05 M NaOH, 25 C, 2 h", target_degradation_percent: 12.0}
+          - {condition: OXIDATIVE, description: "3% H2O2, 25 C, 6 h", target_degradation_percent: 9.0}
+          - {condition: THERMAL, description: "80 C dry heat, 72 h", target_degradation_percent: 5.0}
+          - {condition: PHOTOLYTIC, description: "ICH Q1B option 2", target_degradation_percent: 4.0}
+        criteria:
+          - {metric: PEAK_PURITY, operator: GE, limit: 0.9990}
+          - {metric: BLANK_INTERFERENCE_PERCENT, operator: LE, limit: 0.05}
+          - {metric: MASS_BALANCE_PERCENT, operator: BETWEEN, limit: [95.0, 105.0]}
+
+      linearity:
+        levels_percent: [50, 75, 100, 125, 150]
+        replicates: 3
+        criteria:
+          - {metric: R_SQUARED, operator: GE, limit: 0.9990}
+          - {metric: Y_INTERCEPT_PERCENT_OF_100, operator: LE, limit: 2.0}
+          - {metric: RESIDUAL_RSD_PERCENT, operator: LE, limit: 2.0}
+
+      accuracy:
+        levels_percent: [80, 100, 120]
+        replicates: 3
+        criteria:
+          - {metric: RECOVERY_PERCENT, operator: BETWEEN, limit: [98.0, 102.0]}
+          - {metric: RECOVERY_RSD_PERCENT, operator: LE, limit: 2.0}
+
+      repeatability:
+        level_percent: 100
+        replicates: 6
+        criteria:
+          - {metric: RSD_PERCENT, operator: LE, limit: 2.0}
+
+      intermediate_precision:
+        level_percent: 100
+        replicates: 6
+        # A different analyst, a different day and a different instrument. All
+        # three change at once, which is the point.
+        analyst_id: ANL-02
+        instrument_id: INS-HPLC-02
+        day_offset: 6
+        criteria:
+          - {metric: RSD_PERCENT, operator: LE, limit: 3.0}
+          - {metric: COMBINED_RSD_PERCENT, operator: LE, limit: 3.0}
+
+      detection_limits:
+        # LOD = 3.3 sigma/S and LOQ = 10 sigma/S, from the residual standard
+        # deviation of the low-level regression and its slope.
+        levels_percent: [0.03, 0.05, 0.08, 0.10, 0.15, 0.25]
+        replicates: 3
+        criteria:
+          - {metric: LOQ_SIGNAL_TO_NOISE, operator: GE, limit: 10.0}
+          - {metric: LOQ_RSD_PERCENT, operator: LE, limit: 5.0}
+
+      robustness:
+        # Deliberate variation, one factor at a time. Each condition runs a full
+        # suitability set plus a sample determination, so a factor that breaks
+        # the critical pair is DISCOVERED here rather than declared.
+        replicates: 2
+        conditions:
+          - {factor: flow_rate_ml_min, delta: 0.1}
+          - {factor: flow_rate_ml_min, delta: -0.1}
+          - {factor: column_temperature_c, delta: 5.0}
+          - {factor: column_temperature_c, delta: -5.0}
+          - {factor: organic_percent, delta: 2.0}
+          - {factor: organic_percent, delta: -2.0}
+          - {factor: mobile_phase_ph, delta: 0.2}
+          - {factor: mobile_phase_ph, delta: -0.2}
+        criteria:
+          - {metric: SUITABILITY_PASSES, operator: EQ, limit: 1}
+          - {metric: ASSAY_DIFFERENCE_PERCENT, operator: LE, limit: 2.0}
+
+      solution_stability:
+        timepoints_h: [0, 24, 48]
+        solutions: [STANDARD, SAMPLE]
+        replicates: 2
+        criteria:
+          - {metric: CHANGE_FROM_INITIAL_PERCENT, operator: LE, limit: 2.0}
+
+      filter_validation:
+        filters: [PVDF_0_45, NYLON_0_45]
+        replicates: 3
+        criteria:
+          - {metric: FILTERED_VS_UNFILTERED_PERCENT, operator: LE, limit: 2.0}

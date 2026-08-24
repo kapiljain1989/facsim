@@ -1,0 +1,57 @@
+# System suitability and sequence structure.
+#
+# Criteria are per method, so a chiral method that genuinely cannot reach 2000
+# plates is not judged against an assay method's expectations. Every criterion
+# here is evaluated against a MEASURED descriptor from the trace, so a set can
+# and does fail.
+
+system_suitability:
+  MTH-0001:
+    replicate_injections: 5
+    criteria:
+      - {metric: AREA_RSD_PERCENT, analyte_id: SUB-0001, operator: LE, limit: 2.0}
+      - {metric: RETENTION_RSD_PERCENT, analyte_id: SUB-0001, operator: LE, limit: 1.0}
+      - {metric: TAILING, analyte_id: SUB-0001, operator: LE, limit: 2.0}
+      - {metric: PLATE_COUNT, analyte_id: SUB-0001, operator: GE, limit: 2000}
+      # The critical pair. Measured on a resolution solution, where both peaks
+      # are present at comparable amounts -- resolution is not measurable on a
+      # 0.1% impurity riding on the main peak's flank.
+      - {metric: RESOLUTION, analyte_id: SUB-0001, versus: SUB-0004, operator: GE, limit: 2.0}
+  MTH-0002:
+    replicate_injections: 5
+    criteria:
+      - {metric: AREA_RSD_PERCENT, analyte_id: SUB-0001, operator: LE, limit: 2.0}
+      - {metric: TAILING, analyte_id: SUB-0001, operator: LE, limit: 2.0}
+      - {metric: PLATE_COUNT, analyte_id: SUB-0001, operator: GE, limit: 5000}
+      - {metric: RESOLUTION, analyte_id: SUB-0006, versus: SUB-0001, operator: GE, limit: 2.0}
+
+# A failing suitability set is re-run rather than silently discarded, and both
+# attempts stay in the audit trail. This is the rate at which the FIRST attempt
+# fails for reasons the model does not otherwise generate -- a bubble, a bad
+# standard vial, an unequilibrated column.
+suitability_first_attempt_failure_rate: 0.06
+max_suitability_attempts: 3
+
+# The resolution solution: analyte plus its critical-pair partner at comparable
+# concentration, expressed as a fraction of the assay standard.
+resolution_solution:
+  MTH-0001: {SUB-0001: 1.0, SUB-0004: 0.8}
+  MTH-0002: {SUB-0001: 1.0, SUB-0006: 0.9}
+
+audit_trail:
+  # Part 11 event vocabulary. Declared rather than hard-coded so a different
+  # CDS's audit vocabulary is a config change.
+  events:
+    - {code: SEQUENCE_CREATED, category: ACQUISITION, signature_required: false}
+    - {code: INJECTION_ACQUIRED, category: ACQUISITION, signature_required: false}
+    - {code: RESULT_PROCESSED, category: PROCESSING, signature_required: false}
+    - {code: MANUAL_INTEGRATION, category: PROCESSING, signature_required: false, reason_required: true}
+    - {code: RESULT_REPROCESSED, category: PROCESSING, signature_required: false, reason_required: true}
+    - {code: INJECTION_ABORTED, category: ACQUISITION, signature_required: false, reason_required: true}
+    - {code: SUITABILITY_FAILED, category: REVIEW, signature_required: false}
+    - {code: RESULT_SET_REVIEWED, category: REVIEW, signature_required: true}
+    - {code: RESULT_SET_APPROVED, category: REVIEW, signature_required: true}
+  # Rates for the events an inspector actually looks for.
+  manual_integration_rate: 0.035
+  reprocessing_rate: 0.020
+  aborted_injection_rate: 0.008
