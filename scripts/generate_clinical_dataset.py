@@ -22,6 +22,8 @@ from typing import Any, Iterable
 
 from pharma_sim.clinical.loader import load_clinical_config
 from pharma_sim.clinical.study import StudyOutput, run_study
+from pharma_sim.lifecycle.config import load_lifecycle_config
+from pharma_sim.lifecycle.verify import verify_spine
 
 #: Written as CSV, grouped by the system they would come out of.
 _CTMS = ("sites", "site_milestones", "monitoring_visits", "findings", "action_items",
@@ -29,7 +31,8 @@ _CTMS = ("sites", "site_milestones", "monitoring_visits", "findings", "action_it
 _EDC = ("subjects", "forms", "item_data", "queries", "query_events", "item_audit", "sdv")
 _SDTM = ("tu", "tr", "rs", "adtte")
 _LOCK = ("reconciliations", "lock_events")
-_OPERATIONAL = _CTMS + _EDC + _SDTM + _LOCK
+_IMP = ("imp_lots", "imp_shipments", "imp_kits", "imp_accountability", "dosing", "ex")
+_OPERATIONAL = _CTMS + _EDC + _SDTM + _LOCK + _IMP
 
 _README = """# {study_id} clinical dataset
 
@@ -67,6 +70,12 @@ two opinions about every patient.
 | `deviations.csv` | {n_deviations} | Where the protocol was not followed |
 | `tmf_documents.csv` | {n_tmf} | The regulatory filing cabinet: every document expected, filed or missing |
 | `reconciliations.csv` / `lock_events.csv` | {n_recs} / {n_locks} | Closing the database down for analysis |
+| `imp_lots.csv` | {n_lots} | Batches of drug packed into kits, with expiry dates |
+| `imp_shipments.csv` | {n_shipments} | Shipments to hospitals, including cold-chain failures |
+| `imp_kits.csv` | {n_kits} | Every kit of drug, and which batch it came from |
+| `dosing.csv` | {n_dosing} | Which kit each patient received in each cycle |
+| `ex.csv` | {n_ex} | The same thing in CDISC SDTM form (Exposure) |
+| `imp_accountability.csv` | {n_acc} | Drug arriving, being resupplied, quarantined or running out |
 | `tu.csv` | {n_tu} | Which tumours each reader chose to follow (SDTM Tumour Identification) |
 | `tr.csv` | {n_tr} | Every measurement of every tumour at every scan (SDTM Tumour Results) |
 | `rs.csv` | {n_rs} | The response derived at each scan, plus each patient's best response (SDTM Disease Response) |
@@ -150,6 +159,17 @@ Worth knowing, because these are consequences rather than settings:
   ended. Patients enrolled late have less follow-up, so some are censored simply
   because the data cut arrived. Others are censored because they missed two scans
   in a row before progressing, which makes the progression date unknowable.
+- **The drug is traceable end to end.** Pick any row in `dosing.csv` and you can
+  follow `kit_number` to `imp_kits.csv`, `lot_id` to `imp_lots.csv`, and
+  `batch_id` to the batch it was made from. Twelve integrity checks walk that
+  chain: a patient can only receive the treatment they were randomised to, a kit
+  is dispensed once, nothing is given out before it arrives or after it expires,
+  and nothing comes from a shipment that failed its temperature check. In this
+  dataset the batches are **{batch_source}**.
+- **Kit numbers give nothing away.** They are drawn from one shuffled pool, so
+  sorting `imp_kits.csv` by number does not separate the treatments. Numbering
+  sequentially within each arm would let anybody holding the list reconstruct the
+  allocation, and it is a mistake that has been made.
 - **Ground truth is separate.** `truth/` holds the growth parameters each patient
   was generated from. Do not join it into a training set by accident.
 - **Reproducible.** Same seed, same data. This run used seed {seed}.
@@ -227,6 +247,16 @@ def _write_readme(path: Path, out: StudyOutput, config, written: dict[str, int],
             subjects=len(out.subjects),
             arms=len(config.protocol.arms),
             cutoff=config.protocol.analysis.cutoff_weeks_from_fsi,
+            n_lots=f"{written.get('imp_lots', 0):,}",
+            n_shipments=f"{written.get('imp_shipments', 0):,}",
+            n_kits=f"{written.get('imp_kits', 0):,}",
+            n_dosing=f"{written.get('dosing', 0):,}",
+            n_ex=f"{written.get('ex', 0):,}",
+            n_acc=f"{written.get('imp_accountability', 0):,}",
+            batch_source=(
+                "real manufacturing batches" if out.spine_linked
+                else "labelled stubs, because no plant export was supplied"
+            ),
             n_sites=f"{written.get('sites', 0):,}",
             n_milestones=f"{written.get('site_milestones', 0):,}",
             n_forms=f"{written.get('forms', 0):,}",
@@ -264,13 +294,37 @@ def main() -> int:
     parser.add_argument("--config", default="config/clinical")
     parser.add_argument("--output", default="data/clinical")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--lifecycle", default="config/lifecycle",
+        help="lifecycle links directory; pass an empty string to run without the spine",
+    )
+    parser.add_argument(
+        "--manufacturing-export",
+        help="a plant export directory. Given one, every kit traces to a batch the "
+             "plant actually released; without one the spine uses labelled stubs",
+    )
     args = parser.parse_args()
 
     started = time.monotonic()
     config = load_clinical_config(args.config)
+    lifecycle = load_lifecycle_config(args.lifecycle) if args.lifecycle else None
     print(f"running {config.protocol.study_id}")
-    out = run_study(config, seed=args.seed)
+    out = run_study(
+        config,
+        seed=args.seed,
+        lifecycle=lifecycle,
+        manufacturing_export=args.manufacturing_export,
+    )
     print(out.summary())
+
+    if lifecycle is not None:
+        report = verify_spine(out, lifecycle)
+        print()
+        print(report.render())
+        if not report.ok:
+            print("\nthe identity graph does not hold; not writing a dataset",
+                  file=sys.stderr)
+            return 1
 
     root = Path(args.output)
     written = {

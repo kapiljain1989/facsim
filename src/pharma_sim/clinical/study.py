@@ -31,6 +31,8 @@ from pharma_sim.clinical.edc import (
     generate_edc,
 )
 from pharma_sim.engine.ids import IdFactory
+from pharma_sim.lifecycle.config import LifecycleConfig
+from pharma_sim.lifecycle.spine import Spine, build_spine, resupply
 from pharma_sim.clinical.lesion import (
     ReaderSelection,
     SubjectTumour,
@@ -82,6 +84,15 @@ class StudyOutput:
     tmf_documents: list[dict] = field(default_factory=list)
     reconciliations: list[dict] = field(default_factory=list)
     lock_events: list[dict] = field(default_factory=list)
+    # Lifecycle spine — investigational product from batch to dose
+    imp_lots: list[dict] = field(default_factory=list)
+    imp_shipments: list[dict] = field(default_factory=list)
+    imp_kits: list[dict] = field(default_factory=list)
+    imp_accountability: list[dict] = field(default_factory=list)
+    dosing: list[dict] = field(default_factory=list)
+    ex: list[dict] = field(default_factory=list)
+    #: True when every kit traces to a batch a real manufacturing run produced.
+    spine_linked: bool = False
     #: Ground truth, for the evaluation store only. Never exported operationally.
     truth: list[dict] = field(default_factory=list)
 
@@ -114,6 +125,9 @@ class StudyOutput:
             f"  TMF documents {len(self.tmf_documents)}"
             f" — {self.tmf_completeness:.1f}% complete,"
             f" {self.tmf_timeliness:.1f}% filed on time",
+            f"  IMP lots {len(self.imp_lots)}  shipments {len(self.imp_shipments)}"
+            f"  kits {len(self.imp_kits)}  dosing {len(self.dosing)}  EX {len(self.ex)}"
+            f"  — batches {'from manufacturing' if self.spine_linked else 'STUBBED'}",
         ]
         arms = sorted({row["ARM"] for row in self.subjects})
         evaluators = sorted({row["EVAL"] for row in self.adtte})
@@ -197,8 +211,22 @@ def _permuted_blocks(arms, rng) -> list[str]:
     return sequence
 
 
-def run_study(config: ClinicalConfig, seed: int = 42) -> StudyOutput:
-    """Run the whole study and return it in SDTM, ADaM and operational shape."""
+def run_study(
+    config: ClinicalConfig,
+    seed: int = 42,
+    *,
+    lifecycle: LifecycleConfig | None = None,
+    manufacturing_export: str | None = None,
+) -> StudyOutput:
+    """Run the whole study and return it in SDTM, ADaM and operational shape.
+
+    Args:
+        lifecycle: the spine configuration. Without it the study still runs, but
+            kit numbers are opaque strings that trace to nothing.
+        manufacturing_export: a plant export directory. Given one, kits trace to
+            batches the plant actually released; without one the spine
+            materialises clearly-labelled stubs.
+    """
     protocol = config.protocol
     tumour_config = config.tumour
     rules = rules_from_config(tumour_config)
@@ -214,6 +242,26 @@ def run_study(config: ClinicalConfig, seed: int = 42) -> StudyOutput:
     activations = activate_sites(config, lambda site_id: rngs.child("clin", "site", site_id))
     by_site = {activation.site_id: activation for activation in activations}
     _emit_sites(out, protocol.study_id, activations, protocol.enrolment.first_subject_in)
+
+    # --------------------------------------------------------------- spine
+    spine: Spine | None = None
+    if lifecycle is not None:
+        spine = build_spine(
+            lifecycle,
+            [
+                (
+                    activation.site_id,
+                    protocol.enrolment.first_subject_in
+                    + timedelta(weeks=activation.ready_week),
+                )
+                for activation in activations
+            ],
+            protocol.enrolment.first_subject_in,
+            rngs.child("lifecycle", "spine"),
+            ids,
+            manufacturing_export=manufacturing_export,
+        )
+        out.spine_linked = spine.linked
 
     enrolments = allocate_enrolment(activations, config, rngs.child("clin", "enrolment"))
     arm_sequence = _permuted_blocks(protocol.arms, rngs.child("clin", "randomisation"))
@@ -349,6 +397,7 @@ def run_study(config: ClinicalConfig, seed: int = 42) -> StudyOutput:
                 primary_course, primary_outcome, assessment_facts,
                 activation, enrolment.week, available, cycle_weeks,
                 turnover_multiplier, ids, rngs.child("clin", "cycles", subject_id),
+                spine, lifecycle, out, arm,
             )
         )
 
@@ -380,7 +429,67 @@ def run_study(config: ClinicalConfig, seed: int = 42) -> StudyOutput:
     out.reconciliations = oversight.reconciliations
     out.lock_events = oversight.lock_events
 
+    if spine is not None:
+        _emit_spine(out, spine)
+
     return out
+
+
+def _emit_spine(out: StudyOutput, spine: Spine) -> None:
+    """Record the investigational product chain."""
+    for batch in spine.batches:
+        pass  # batches belong to the manufacturing dataset, not this one
+    for lot in spine.lots:
+        out.imp_lots.append(
+            {
+                "lot_id": lot.lot_id,
+                "batch_id": lot.batch_id,
+                "product_id": lot.product_id,
+                "role": lot.role,
+                "kits": lot.kits,
+                "packed_on": lot.packed_on.isoformat(),
+                "expiry": lot.expiry.isoformat(),
+                "batch_source": "STUB" if lot.stub_batch else "MANUFACTURING",
+            }
+        )
+    for shipment in spine.shipments:
+        out.imp_shipments.append(
+            {
+                "shipment_id": shipment.shipment_id,
+                "site_id": shipment.site_id,
+                "lot_ids": ",".join(shipment.lot_ids),
+                "kits": shipment.kits,
+                "shipped_on": shipment.shipped_on.isoformat(),
+                "received_on": shipment.received_on.isoformat(),
+                "status": shipment.status,
+                "temperature_excursion": "Y" if shipment.temperature_excursion else "N",
+            }
+        )
+    for kit in spine.kits:
+        out.imp_kits.append(
+            {
+                "kit_number": kit.kit_number,
+                "lot_id": kit.lot_id,
+                "batch_id": kit.batch_id,
+                "role": kit.role,
+                "shipment_id": kit.shipment_id,
+                "site_id": kit.site_id,
+            }
+        )
+    out.imp_accountability = list(spine.accountability)
+    for stockout in spine.stockouts:
+        out.imp_accountability.append(
+            {
+                "accountability_id": "",
+                "site_id": stockout["site_id"],
+                "shipment_id": "",
+                "event": "STOCKOUT",
+                "kits": 0,
+                "occurred_on": stockout["occurred_on"],
+                "detail": f"No {stockout['role']} kit available for "
+                          f"{stockout['subject_id']} cycle {stockout['cycle']}",
+            }
+        )
 
 
 def _build_context(
@@ -399,6 +508,10 @@ def _build_context(
     turnover_multiplier: float,
     ids: IdFactory,
     rng,
+    spine: Spine | None,
+    lifecycle: LifecycleConfig | None,
+    out: StudyOutput,
+    arm,
 ) -> SubjectContext:
     """Assemble the EDC view of one subject from what the study already computed."""
     # Treatment runs until progression, death or the data cut, whichever is first.
@@ -410,6 +523,8 @@ def _build_context(
     ]
     cycle_facts: dict[int, dict[str, object]] = {}
     dose = 240.0
+    role = lifecycle.randomisation.role_for(arm_id) if lifecycle else None
+
     for cycle in range(1, cycles + 1):
         visitnum = 100 + cycle
         day = randomised + timedelta(weeks=(cycle - 1) * cycle_weeks)
@@ -418,11 +533,75 @@ def _build_context(
         adjusted = rng.random() < 0.06
         if adjusted and dose > 120.0:
             dose -= 60.0
+
+        kit = None
+        if spine is not None and role is not None:
+            trigger = lifecycle.imp.shipment.resupply_trigger_kits
+            if spine.kits_remaining(site_id, role, day) <= trigger:
+                resupply(spine, site_id, role, day, rng)
+            kit = spine.kit_for(site_id, role, day)
+            if kit is None:
+                spine.stockouts.append(
+                    {
+                        "site_id": site_id,
+                        "subject_id": subject_id,
+                        "cycle": cycle,
+                        "role": role,
+                        "occurred_on": day.isoformat(),
+                    }
+                )
+
+        kit_number = kit.kit_number if kit is not None else ""
         cycle_facts[visitnum] = {
             "DOSE": dose,
             "DOSE_ADJUSTED": "Y" if adjusted else "N",
-            "KIT_NUMBER": f"KIT-{ids.next('K', width=6).split('-')[1]}",
+            "KIT_NUMBER": kit_number,
         }
+
+        if kit is not None:
+            out.dosing.append(
+                {
+                    "dosing_id": ids.next("DOS", width=7),
+                    "subject_id": subject_id,
+                    "site_id": site_id,
+                    "cycle": cycle,
+                    "visitnum": visitnum,
+                    "dosed_on": day.isoformat(),
+                    "kit_number": kit.kit_number,
+                    "lot_id": kit.lot_id,
+                    "batch_id": kit.batch_id,
+                    "dose_mg": dose,
+                    "dose_adjusted": "Y" if adjusted else "N",
+                }
+            )
+            # SDTM EX. EXTRT stays at the blinded label because that is what the
+            # form recorded; the kit reference is how it resolves to a batch.
+            out.ex.append(
+                {
+                    "STUDYID": out.study_id,
+                    "DOMAIN": "EX",
+                    "USUBJID": subject_id,
+                    "EXSEQ": cycle,
+                    "EXTRT": "NELVORASIB OR PLACEBO",
+                    "EXDOSE": dose,
+                    "EXDOSU": "mg",
+                    "EXDOSFRM": "TABLET, FILM COATED",
+                    "EXDOSFRQ": "QD",
+                    "EXROUTE": "ORAL",
+                    "EXREFID": kit.kit_number,
+                    "EXSTDTC": day.isoformat(),
+                    "EXENDTC": (
+                        day + timedelta(weeks=cycle_weeks) - timedelta(days=1)
+                    ).isoformat(),
+                    "VISITNUM": visitnum,
+                    "VISIT": f"CYCLE {cycle} DAY 1",
+                    # Not SDTM variables. Carried so the accountability chain is
+                    # walkable without joining three more tables.
+                    "LOTID": kit.lot_id,
+                    "BATCHID": kit.batch_id,
+                }
+            )
+
         visits.append(
             VisitRecord(visitnum=visitnum, visit=f"CYCLE {cycle} DAY 1", day=day, kind="CYCLE")
         )

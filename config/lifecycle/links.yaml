@@ -1,0 +1,79 @@
+# The spine: what ties the laboratory, the plant and the clinic to one another.
+#
+# Every other config file describes one domain. This one describes the joins, and
+# it is the file that makes the dataset more than three datasets in a directory.
+#
+# The joins declared here are checked rather than assumed. `pharma_sim
+# verify-spine` walks each one and fails if a link does not resolve — a kit that
+# traces to no batch, a QC parameter measured by a method that was never
+# validated, an expiry date that no stability study supports.
+
+substance: SUB-0001
+
+# The drug products the substance becomes. Both are made in the plant, and they
+# have to be indistinguishable: a subject holding a placebo tablet must not be
+# able to tell, so appearance attributes are shared and asserted equal.
+drug_products:
+  - product_id: PRD-NVR060
+    role: ACTIVE
+    description: Nelvorasib 60 mg film-coated tablet
+    strength_mg: 60.0
+    formulation: FRM-0001
+  - product_id: PRD-NVRPBO
+    role: PLACEBO
+    description: Matching placebo film-coated tablet
+    strength_mg: 0.0
+    formulation: FRM-0002
+
+# Which analytical method measures which of the plant's QC parameters. This is
+# the join that lets the plant's QC precision be checked against the precision
+# the method actually demonstrated in validation.
+qc_methods:
+  - {qc_parameter: assay, method_id: MTH-0001, analyte_id: SUB-0001}
+  - {qc_parameter: impurities, method_id: MTH-0001, analyte_id: SUB-0004}
+
+# Clinical supply. A released batch becomes an IMP lot, the lot is packed into
+# kits, kits are shipped to sites, and a kit is dispensed to a subject.
+imp:
+  # Four 60 mg tablets a day for a 28-day cycle, plus an overage.
+  tablets_per_kit: 116
+  kits_per_lot: 850
+  lot_expiry_months: 24
+  # Only a batch the qualified person has released can be packed.
+  releasable_dispositions: [RELEASED, ACCEPTED, GOOD]
+  shipment:
+    initial_kits_per_site: 36
+    resupply_kits: 24
+    resupply_trigger_kits: 10
+    lead_time_days: {mean: 9.0, sd: 3.0}
+    # Cold-chain excursions happen. An affected shipment is quarantined and
+    # replaced, which is a real event in an accountability record.
+    temperature_excursion_probability: 0.04
+
+# Kit assignment. The generated dataset represents the study AFTER unblinding --
+# the lock sequence ends with an unblinding event and subject arms are present --
+# so which kits held active drug is recorded. What must still hold is that the
+# kit NUMBER carries no information: numbering sequentially within each arm would
+# let anybody holding the kit list reconstruct the allocation, and that is a
+# mistake that has been made in real studies.
+randomisation:
+  kits_per_subject_per_cycle: 1
+  blinded_kit_pool: true
+  # Which arm receives which product. Declared rather than inferred from the arm
+  # label: getting this wrong would give half the subjects the other arm's
+  # product and nothing downstream would notice.
+  arm_products:
+    - {arm_id: ARM-A, role: ACTIVE}
+    - {arm_id: ARM-B, role: PLACEBO}
+
+# When the plant has not been run, the spine materialises batch stubs so the
+# clinical dataset is still internally consistent. A stub is labelled as one, so
+# nothing can quietly pass a real-batch check.
+stub_batches:
+  # Enough campaigns to keep in-date stock available across the whole study. Six
+  # batches over eight months left the last subjects with nothing that had not
+  # expired, which the spine checks caught as kits dispensed past their expiry.
+  count: 12
+  batch_size_tablets: 62000
+  first_release_offset_weeks: -14.0
+  release_interval_weeks: 11.0

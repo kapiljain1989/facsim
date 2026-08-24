@@ -210,6 +210,11 @@ def allocate_enrolment(
     enrolled: list[Enrolment] = []
     week = 0.0
     horizon = protocol.analysis.horizon_weeks
+    # Weeks are reported on the STUDY clock, whose origin is the study start, not
+    # the first site opening. Reporting them from the first opening made the first
+    # subject appear to be randomised in study week zero -- fifteen weeks before
+    # any site was open and before any drug had been shipped, which the spine
+    # checks caught as kits dispensed months before they arrived.
     while len(enrolled) < target and week <= horizon:
         for activation in activations:
             if len(enrolled) >= target:
@@ -221,7 +226,7 @@ def allocate_enrolment(
                 if len(enrolled) >= target:
                     break
                 # Randomisation lands somewhere inside the week.
-                offset = week + rng.random()
+                offset = earliest + week + rng.random()
                 enrolled.append(
                     Enrolment(
                         subject_id="",  # assigned by the caller, in enrolment order
