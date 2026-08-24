@@ -27,6 +27,7 @@ submission-ready datasets.
 - [9. The multi-timescale problem](#9-the-multi-timescale-problem)
 - [10. Platform work this forces](#10-platform-work-this-forces)
 - [11. Build phases](#11-build-phases)
+  - [11.1 The determinism prerequisite](#111-the-determinism-prerequisite)
 - [12. How we know it is credible](#12-how-we-know-it-is-credible)
 - [13. Risks and open questions](#13-risks-and-open-questions)
 
@@ -718,6 +719,13 @@ acceptance criterion for Phase 0.
 
 ### Phase 0 — Spine and platform (foundation)
 
+- **Cross-process determinism.** Done first, because everything below is
+  acceptance-tested by comparing digests, and a digest that is not stable
+  against itself proves nothing. See
+  [§11.1](#111-the-determinism-prerequisite).
+- `scripts/phase0_digest.py` — the acceptance harness: runs the simulation into
+  a scratch directory, exports CSV, and hashes the content with the three
+  wall-clock columns blanked. `--compare` diffs two manifests file by file.
 - Namespaced config with the compatibility shim; modular schema with topological
   `TABLE_ORDER`; registry bundles; new priority bands; new id accessors.
 - `domain/lifecycle/graph.py` and `config/lifecycle/links.yaml`.
@@ -725,6 +733,54 @@ acceptance criterion for Phase 0.
 - **Acceptance:** `pytest` green, and a 30-day run at the current seed produces a
   byte-identical export digest to the current `master`. The extension must not
   perturb existing history.
+
+#### 11.1 The determinism prerequisite
+
+Building the harness immediately found that **the simulator's output depended on
+`PYTHONHASHSEED`**. Two runs of the same config at the same seed produced
+different row counts — 78 batches against 76, 2,607 state intervals against
+2,443 — because of one expression in
+[`domain/plant.py`](../src/pharma_sim/domain/plant.py):
+
+```python
+classes_here = tuple({group.equipment_class for group in ...})
+```
+
+A set comprehension materialised into a tuple. Set iteration order for strings
+varies per process, and a few lines later that tuple is zipped against RNG
+draws:
+
+```python
+certified = tuple(c for c in classes_here if rng.random() < 0.82)
+```
+
+The *number* of draws was stable, so the seed looked respected — but a different
+equipment class received each draw in every process. Different certifications
+mean different operator assignment, which means different production, which
+cascades through the whole run. It contradicted the central claim in
+[`engine/rng.py`](../src/pharma_sim/engine/rng.py) that named streams make a run
+reproducible regardless of interleaving.
+
+The fix is `dict.fromkeys` instead of a set: deduplicate while preserving the
+declaration order from `units.yaml`, which is both deterministic and the order a
+reader of the config expects. Sorting would also have been deterministic, but it
+would have imposed an order that appears nowhere in the configuration.
+
+Two things are worth drawing out of this, because they shape the rest of the
+plan:
+
+1. **In-process tests structurally cannot catch this.** `PYTHONHASHSEED` is
+   fixed for the life of an interpreter, so two builds in one process always
+   agree. `tests/test_determinism.py` shells out with the seed set explicitly,
+   and pairs that with a static AST guard against the pattern — an ordered
+   container built from a `set` or `frozenset` anywhere in the package. Both
+   tests were confirmed to fail against the unfixed code before being kept.
+2. **The exposure grows with every new domain.** Manufacturing had one instance
+   of the pattern. The clinical and laboratory domains will introduce far more
+   collection-shuffling — lesion sets, certified analyst pools, expected-document
+   lists, kit pools — and each is a place where the same class of bug pairs the
+   wrong entity with the wrong draw. The AST guard is cheap insurance, and it
+   belongs in CI before the new domains are written, not after.
 
 ### Phase 1 — Laboratory vertical slice
 

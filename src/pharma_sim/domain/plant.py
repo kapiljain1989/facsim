@@ -283,11 +283,16 @@ class FactoryBuilder:
 
         for unit_spec in topology.units():
             unit = plant.units[unit_spec.id]
+            # dict.fromkeys, not a set: this tuple is zipped against RNG draws
+            # below, and a set's iteration order for strings varies with
+            # PYTHONHASHSEED — which would pair a different equipment class with
+            # each draw in every process and make the whole run irreproducible.
+            # Declaration order is also what a reader of units.yaml expects.
             classes_here = tuple(
-                {
+                dict.fromkeys(
                     group.equipment_class
                     for group in self._registries.equipment.groups_for_unit(unit_spec.id)
-                }
+                )
             )
 
             for _ in range(unit_spec.manager_count):
