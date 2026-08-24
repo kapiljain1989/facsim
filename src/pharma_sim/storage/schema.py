@@ -478,6 +478,12 @@ _QC_RESULTS = Table(
         _c("machine_id", "TEXT"),
         _c("unit", "TEXT"),
         _c("sample_size", "INTEGER"),
+        # The analytical method this number came from, and the precision it
+        # demonstrated in validation. Without them a QC result is a number with
+        # no provenance, and the claim that the plant's precision is bounded by
+        # the method's cannot be checked.
+        _c("method_id", "TEXT"),
+        _c("analytical_rsd", "REAL"),
         _c("run_id", "TEXT", fk="runs.run_id"),
     ),
     indexes=(("batch_id",), ("parameter",), ("result",)),

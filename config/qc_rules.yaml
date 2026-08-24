@@ -341,3 +341,195 @@ parameters:
         - {input: cycle_time, coef: -0.55}           # longer cycle -> lower count
         - {input: ambient_humidity_pct, coef: 0.30}
       clip_min: 0.0
+
+  # ---- Oncology containment suite -----------------------------------------
+  # A separate parameter set rather than reuse of the parameters above, because
+  # the stages differ and a transfer function that read another product's
+  # compression force would be physically meaningless. Intercepts are chosen so
+  # nominal inputs land on target, as everywhere else here.
+
+  # Cleaning validation for a highly potent compound. The limit is derived from
+  # the health-based exposure limit in the laboratory substance record -- a
+  # permitted daily exposure of 12 ug -- rather than from the thousandth-of-a-dose
+  # heuristic the shared suites use. That heuristic is not defensible for an OEB 4
+  # compound and has not been acceptable for some years.
+  - id: cleaning_swab_residue
+    name: Cleaning Verification Swab (Nelvorasib Residue)
+    stage: CONTAINED_DISPENSING
+    phase: IN_PROCESS
+    unit: ug/swab
+    target: 0.85
+    lower_limit: 0.0
+    upper_limit: 4.0
+    noise_sigma: 0.11
+    sample_size: 10
+    transfer:
+      # Residue is about throughput and equipment condition, not about the
+      # weight recorded at a stage three steps away -- which was the original
+      # input and was unavailable often enough to leave this evaluating at its
+      # intercept. Degraded surfaces are harder to clean to a health-based limit,
+      # which is why a suite gets a deep clean before its qualification expires.
+      intercept: 0.2486
+      terms:
+        - {input: batch_size, coef: 0.0000097}
+        - {input: machine_health, coef: 1.200}
+      clip_min: 0.0
+
+  - id: nvr_blend_uniformity
+    name: Blend Uniformity RSD (Contained)
+    stage: CONTAINED_BLENDING
+    phase: IN_PROCESS
+    unit: '%'
+    target: 2.2
+    lower_limit: 0.0
+    upper_limit: 5.0
+    noise_sigma: 0.18
+    health_sensitivity: 0.30
+    sample_size: 10
+    transfer:
+      intercept: 4.24
+      terms:
+        - {input: blend_time, coef: -0.060}
+        - {input: rpm, coef: -0.050}
+      clip_min: 0.2
+
+  - id: nvr_tablet_weight
+    name: Tablet Weight (Nelvorasib)
+    stage: CONTAINED_COMPRESSION
+    phase: IN_PROCESS
+    unit: mg
+    target: 210.0
+    lower_limit: 201.6
+    upper_limit: 218.4
+    noise_sigma: 1.35
+    health_sensitivity: 0.28
+    sample_size: 20
+    transfer:
+      intercept: 0.0
+      terms:
+        - {input: tablet_weight, coef: 1.0}
+      clip_min: 0.0
+
+  - id: nvr_tablet_hardness
+    name: Tablet Hardness (Nelvorasib)
+    stage: CONTAINED_COMPRESSION
+    phase: IN_PROCESS
+    unit: N
+    target: 95.0
+    lower_limit: 70.0
+    upper_limit: 120.0
+    noise_sigma: 2.4
+    health_sensitivity: -0.35
+    sample_size: 10
+    transfer:
+      intercept: 35.6
+      terms:
+        - {input: main_compression_force, coef: 6.20}
+        - {input: turret_speed, coef: -0.350}
+      clip_min: 5.0
+
+  - id: nvr_coating_weight_gain
+    name: Coating Weight Gain (Nelvorasib)
+    stage: CONTAINED_COATING
+    phase: IN_PROCESS
+    unit: '%'
+    target: 3.0
+    lower_limit: 2.0
+    upper_limit: 4.0
+    noise_sigma: 0.09
+    health_sensitivity: 0.25
+    sample_size: 20
+    transfer:
+      intercept: 0.592
+      terms:
+        - {input: spray_rate, coef: 0.0280}
+        - {input: inlet_temperature, coef: 0.0120}
+      clip_min: 0.1
+
+  - id: nvr_water_content
+    name: Water Content by Karl Fischer (Nelvorasib)
+    stage: CONTAINED_COATING
+    phase: FINAL
+    unit: '%'
+    target: 2.6
+    lower_limit: 0.0
+    upper_limit: 4.0
+    noise_sigma: 0.07
+    health_sensitivity: 0.20
+    sample_size: 3
+    transfer:
+      intercept: 3.832
+      terms:
+        - {input: inlet_temperature, coef: -0.0220}
+      clip_min: 0.1
+
+  # Dissolution falls when the tablet is harder or the coat is heavier, which is
+  # the same causal chain the commercial products use and for the same reason.
+  - id: nvr_dissolution
+    name: Dissolution (Q at 30 min, Nelvorasib)
+    stage: CONTAINED_COATING
+    phase: FINAL
+    unit: '%'
+    target: 88.0
+    lower_limit: 80.0
+    upper_limit: 105.0
+    noise_sigma: 1.7
+    health_sensitivity: -0.30
+    sample_size: 6
+    transfer:
+      intercept: 109.3
+      terms:
+        - {input: nvr_tablet_hardness, coef: -0.180}
+        - {input: nvr_coating_weight_gain, coef: -1.400}
+      clip_min: 5.0
+      clip_max: 100.0
+
+  # Measured by the method validated in VAL-0001. noise_sigma is the PROCESS
+  # contribution only; the measurement's own contribution comes from
+  # analytical_rsd, which is the combined intermediate precision that validation
+  # demonstrated. verify-spine checks the number against the laboratory dataset,
+  # so it cannot drift away from the validation it claims to come from.
+  - id: nvr_assay
+    name: Assay (% Label Claim, Nelvorasib)
+    stage: CONTAINED_COATING
+    phase: FINAL
+    unit: '%'
+    target: 100.0
+    lower_limit: 95.0
+    upper_limit: 105.0
+    method_id: MTH-0001
+    analytical_rsd: 0.00735
+    noise_sigma: 0.42
+    sample_size: 3
+    transfer:
+      intercept: 1.140
+      terms:
+        # 0.476 is 100/210: a proportional change in tablet weight maps one for
+        # one onto percent of label claim, which is what it physically does.
+        - {input: nvr_tablet_weight, coef: 0.476}
+        - {input: nvr_blend_uniformity, coef: -0.500}
+        - {input: material_variability, coef: -8.0}
+      clip_min: 50.0
+
+  # The same method, reported against the impurity rather than the assay. Its
+  # precision at that level is worse, because a 0.28% peak is close to the
+  # quantitation limit the validation established.
+  - id: nvr_impurities
+    name: Total Related Substances (Nelvorasib)
+    stage: CONTAINED_COATING
+    phase: FINAL
+    unit: '%'
+    target: 0.28
+    lower_limit: 0.0
+    upper_limit: 1.0
+    method_id: MTH-0001
+    analytical_rsd: 0.0213
+    noise_sigma: 0.035
+    health_sensitivity: 0.40
+    sample_size: 3
+    transfer:
+      intercept: -0.030
+      terms:
+        - {input: inlet_temperature, coef: 0.00550}
+        - {input: material_variability, coef: 0.100}
+      clip_min: 0.0

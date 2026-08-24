@@ -533,6 +533,16 @@ class QcParamSpec(Strict):
     lower_limit: float | None = None
     upper_limit: float | None = None
     #: Analytical measurement noise.
+    #: The analytical method that measures this parameter, from the laboratory
+    #: domain. Declared rather than inferred, and checked against that method's
+    #: actual validation by ``verify-spine``.
+    method_id: Ident | None = None
+    #: Relative standard deviation the method demonstrated in validation. The
+    #: observed variability of a QC result is the process contribution and this
+    #: combined in quadrature, because a result carries the error of the
+    #: measurement as well as the variability of the product. Revalidating the
+    #: method tighter makes the plant's QC tighter, which is the point.
+    analytical_rsd: NonNegative | None = None
     noise_sigma: NonNegative = 0.0
     transfer: Transfer = Field(default_factory=Transfer)
     #: Extra variance contributed by machine ill-health during the stage.

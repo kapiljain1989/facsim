@@ -67,18 +67,40 @@ class TestTopology:
             assert len(machine.plc) == len(machine.sensors)
 
     def test_shipped_default_config_matches_the_brief(self, plant, config):
-        """The brief's numbers are the default config, not an assumption."""
-        assert len(plant.units) == 10
-        assert plant.machine_count == 100
-        assert plant.worker_count == 100
+        """The shipped numbers are the default config, not an assumption.
+
+        Asserted as a composition rather than as totals. The commercial plant is
+        the ten units and hundred machines of the original brief; the containment
+        suite for the oncology programme is four more units of one machine each,
+        added because an OEB 4 compound cannot be handled in shared equipment.
+        Pinning only the totals would let a change to either part hide inside the
+        other.
+        """
+        contained = {
+            unit_id
+            for unit_id, unit in plant.units.items()
+            if unit.spec.process_stage.startswith("CONTAINED_")
+        }
+        commercial = set(plant.units) - contained
+
+        assert len(commercial) == 10, "the commercial plant is the original brief"
+        assert len(contained) == 4, "one contained unit per stage of the oncology route"
+        assert sum(
+            1 for m in plant.machines.values() if m.unit_id in commercial
+        ) == 100
+        assert sum(1 for m in plant.machines.values() if m.unit_id in contained) == 4
+
         assert len(plant.units) == sum(1 for u in plant.units.values() if u.manager_ids)
-        managers = [
-            e for e in plant.employees.values() if e.role == "UNIT_MANAGER"
-        ]
-        assert len(managers) == 10
+        managers = [e for e in plant.employees.values() if e.role == "UNIT_MANAGER"]
+        assert len(managers) == len(plant.units)
         assert sum(1 for e in plant.employees.values() if e.role == "PLANT_MANAGER") == 1
         assert len(config.shifts.shifts) == 3
         assert len(config.states.states) == 9
+
+        # Headcount follows the declared worker_count per unit, so it is derived
+        # rather than restated: gowning limits how many people are in a
+        # containment suite, and the config says four.
+        assert plant.worker_count == sum(u.worker_count for u in config.units.units)
 
     def test_workforce_is_spread_across_every_shift(self, plant, config):
         codes = {spec.code for spec in config.shifts.shifts}

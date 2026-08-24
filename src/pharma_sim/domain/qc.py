@@ -18,6 +18,7 @@ Two details matter for correctness:
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from random import Random
 
@@ -154,12 +155,27 @@ class QcEngine:
             values = self._input_values(spec, stage_parameters, merged, computed, drivers)
             value = spec.spec.transfer.evaluate(values, self._references)
 
-            # Analytical noise, inflated by a degrading machine: a sick machine
-            # produces more variable product, not merely a shifted mean.
-            sigma = spec.spec.noise_sigma * (1.0 + 1.5 * machine_health)
+            # Process variability, inflated by a degrading machine: a sick
+            # machine produces more variable product, not merely a shifted mean.
+            process_sigma = spec.spec.noise_sigma * (1.0 + 1.5 * machine_health)
+
+            # Measurement variability, from the analytical method that produces
+            # this number. A QC result is a measurement, so it carries the
+            # method's error as well as the product's, and the two combine in
+            # quadrature because they are independent. Where a method is
+            # declared, this makes the plant's observed precision bounded below
+            # by the precision that method demonstrated in validation -- so
+            # revalidating the method tighter tightens QC, and a method that
+            # cannot measure to a specification cannot be used to release
+            # against it.
+            analytical_sigma = 0.0
+            if spec.spec.analytical_rsd:
+                analytical_sigma = spec.spec.analytical_rsd * abs(spec.target)
+
+            sigma = math.sqrt(process_sigma**2 + analytical_sigma**2)
             if sigma > 0.0:
                 # Averaging over the sample reduces the standard error, as a real
-                # multi-tablet determination would.
+                # multi-determination result would.
                 sigma /= max(1.0, spec.spec.sample_size**0.5)
                 value += rng.gauss(0.0, sigma)
             if spec.spec.health_sensitivity:
@@ -191,6 +207,8 @@ class QcEngine:
                     machine_id=machine_id,
                     unit=spec.spec.unit,
                     sample_size=spec.spec.sample_size,
+                    method_id=spec.spec.method_id,
+                    analytical_rsd=spec.spec.analytical_rsd,
                     run_id=self._run_id,
                 )
             )

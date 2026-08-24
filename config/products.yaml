@@ -212,3 +212,96 @@ products:
        dissolution, content_uniformity, assay, impurities, water_content, microbial_limit]
     qc_overrides:
       tablet_weight_qc: {target: 580.0, lower_limit: 562.0, upper_limit: 598.0}
+
+  # ---- Oncology clinical supply -------------------------------------------
+  # The investigational product for study NVR-101-201, and its matching placebo.
+  # Both are routed exclusively through the containment suite (UNIT-11 to 14) and
+  # then through shared packaging, which is acceptable because by that point the
+  # tablets are film-coated and sealed.
+  #
+  # Batch size is clinical scale, not commercial: 62,000 tablets is a few months
+  # of supply for a 120-subject study, and a bigger batch of a potent compound is
+  # more material to contain for no benefit.
+  #
+  # `demand_weight` is low for both. The suite runs occasional campaigns rather
+  # than continuously, which is what a clinical supply line actually does.
+  - product_id: PRD-NVR060
+    product_name: Nelvorasib 60 mg Film-Coated Tablet
+    dosage_form: TABLET
+    batch_size: 62000
+    target_quantity: 62000
+    demand_weight: 0.5
+    manufacturing_process:
+      [CONTAINED_DISPENSING, CONTAINED_BLENDING, CONTAINED_COMPRESSION, CONTAINED_COATING, PACKAGING]
+    raw_materials:
+      - {material_id: RM-NVRAPI, name: Nelvorasib API (micronised), quantity_kg: 3.75, variability: 0.012}
+      - {material_id: RM-MCC, name: Microcrystalline Cellulose, quantity_kg: 5.20, variability: 0.028}
+      - {material_id: RM-MANN, name: Mannitol 200SD, quantity_kg: 2.60, variability: 0.024}
+      - {material_id: RM-CCS, name: Croscarmellose Sodium, quantity_kg: 0.78, variability: 0.024}
+      - {material_id: RM-HPC, name: Hydroxypropyl Cellulose EXF, quantity_kg: 0.44, variability: 0.022}
+      - {material_id: RM-SLS, name: Sodium Lauryl Sulfate, quantity_kg: 0.13, variability: 0.020}
+      - {material_id: RM-CSD, name: Colloidal Silicon Dioxide, quantity_kg: 0.13, variability: 0.026}
+      - {material_id: RM-MGST, name: Magnesium Stearate, quantity_kg: 0.13, variability: 0.025}
+      - {material_id: RM-COATNVR, name: Opadry II Beige 85F, quantity_kg: 0.42, variability: 0.020}
+    process_parameters:
+      CONTAINED_DISPENSING:
+        dispensed_weight: {target: 9.40, min: 9.25, max: 9.55, unit: kg}
+      CONTAINED_BLENDING:
+        blend_time: {target: 24.0, min: 20.0, max: 28.0, unit: min}
+        rpm: {target: 12.0, min: 10.0, max: 14.0, unit: rpm}
+      CONTAINED_COMPRESSION:
+        main_compression_force: {target: 11.5, min: 9.5, max: 13.5, unit: kN}
+        turret_speed: {target: 34.0, min: 28.0, max: 40.0, unit: rpm}
+        tablet_weight: {target: 210.0, min: 201.6, max: 218.4, unit: mg}
+      CONTAINED_COATING:
+        spray_rate: {target: 62.0, min: 52.0, max: 74.0, unit: g/min}
+        inlet_temperature: {target: 56.0, min: 50.0, max: 62.0, unit: degC}
+      PACKAGING:
+        sealing_temperature: {target: 165.0, min: 155.0, max: 176.0, unit: degC}
+    qc_specifications:
+      [cleaning_swab_residue, nvr_blend_uniformity, nvr_tablet_weight, nvr_tablet_hardness,
+       nvr_coating_weight_gain, nvr_water_content, nvr_dissolution, nvr_assay, nvr_impurities]
+
+  # The matching placebo. Every appearance-determining parameter is identical to
+  # the active tablet -- weight, compression force, coating weight gain -- because
+  # a subject who can tell the two apart is unblinded. The API is replaced by
+  # filler, so the excipient quantities differ while the tablet does not.
+  - product_id: PRD-NVRPBO
+    product_name: Nelvorasib Matching Placebo Film-Coated Tablet
+    dosage_form: TABLET
+    batch_size: 62000
+    target_quantity: 62000
+    demand_weight: 0.35
+    manufacturing_process:
+      [CONTAINED_DISPENSING, CONTAINED_BLENDING, CONTAINED_COMPRESSION, CONTAINED_COATING, PACKAGING]
+    raw_materials:
+      - {material_id: RM-MCC, name: Microcrystalline Cellulose, quantity_kg: 7.45, variability: 0.028}
+      - {material_id: RM-MANN, name: Mannitol 200SD, quantity_kg: 4.10, variability: 0.024}
+      - {material_id: RM-CCS, name: Croscarmellose Sodium, quantity_kg: 0.78, variability: 0.024}
+      - {material_id: RM-HPC, name: Hydroxypropyl Cellulose EXF, quantity_kg: 0.44, variability: 0.022}
+      - {material_id: RM-SLS, name: Sodium Lauryl Sulfate, quantity_kg: 0.13, variability: 0.020}
+      - {material_id: RM-CSD, name: Colloidal Silicon Dioxide, quantity_kg: 0.13, variability: 0.026}
+      - {material_id: RM-MGST, name: Magnesium Stearate, quantity_kg: 0.13, variability: 0.025}
+      - {material_id: RM-COATNVR, name: Opadry II Beige 85F, quantity_kg: 0.42, variability: 0.020}
+    process_parameters:
+      CONTAINED_DISPENSING:
+        dispensed_weight: {target: 9.40, min: 9.25, max: 9.55, unit: kg}
+      CONTAINED_BLENDING:
+        blend_time: {target: 24.0, min: 20.0, max: 28.0, unit: min}
+        rpm: {target: 12.0, min: 10.0, max: 14.0, unit: rpm}
+      CONTAINED_COMPRESSION:
+        main_compression_force: {target: 11.5, min: 9.5, max: 13.5, unit: kN}
+        turret_speed: {target: 34.0, min: 28.0, max: 40.0, unit: rpm}
+        tablet_weight: {target: 210.0, min: 201.6, max: 218.4, unit: mg}
+      CONTAINED_COATING:
+        spray_rate: {target: 62.0, min: 52.0, max: 74.0, unit: g/min}
+        inlet_temperature: {target: 56.0, min: 50.0, max: 62.0, unit: degC}
+      PACKAGING:
+        sealing_temperature: {target: 165.0, min: 155.0, max: 176.0, unit: degC}
+    # No assay or impurity specification: there is nothing to assay. Blind
+    # integrity is confirmed instead, by showing no API above the limit of
+    # quantitation -- which is a laboratory test on the placebo, not a QC test in
+    # the plant, and is why it does not appear here.
+    qc_specifications:
+      [cleaning_swab_residue, nvr_blend_uniformity, nvr_tablet_weight, nvr_tablet_hardness,
+       nvr_coating_weight_gain, nvr_water_content, nvr_dissolution]

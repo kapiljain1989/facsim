@@ -32,6 +32,61 @@ ROLE_FIELDS: frozenset[str] = frozenset(
 )
 
 
+def _check_process_parameters_are_measured(config, collector) -> None:
+    """Every product setpoint must be measured by some machine at that stage.
+
+    Without this, a product can declare a setpoint for a stage whose equipment
+    has no sensor flagged as a process parameter for that tag. The stage then
+    records no achieved values, and every QC transfer that reads one silently
+    evaluates at its intercept. The result looks like data: it is the right
+    order of magnitude, it varies, and it is completely disconnected from the
+    process. That is worse than a crash, and it is exactly what happened when
+    the containment suite was added with the flag left off.
+    """
+    # Which tags each unit can measure as a process parameter.
+    measurable: dict[str, set[str]] = {}
+    for unit_id, groups in config.machines.layout.items():
+        tags: set[str] = set()
+        for group in groups:
+            equipment = next(
+                (item for item in config.machines.equipment_classes
+                 if item.id == group.equipment_class),
+                None,
+            )
+            if equipment is None:
+                continue
+            for sensor in equipment.sensors:
+                if sensor.process_parameter:
+                    tags.add(sensor.tag)
+            if equipment.sensor_profile:
+                # profiles maps a profile id straight to its list of sensors.
+                for sensor in config.sensors.profiles.get(equipment.sensor_profile, ()):
+                    if sensor.process_parameter:
+                        tags.add(sensor.tag)
+        measurable[unit_id] = tags
+
+    stage_units: dict[str, list[str]] = {}
+    for unit in config.units.units:
+        stage_units.setdefault(unit.process_stage, []).append(unit.id)
+
+    for product in config.products.products:
+        for stage, parameters in product.process_parameters.items():
+            units = stage_units.get(stage, [])
+            available: set[str] = set()
+            for unit_id in units:
+                available |= measurable.get(unit_id, set())
+            for name in parameters:
+                if name not in available:
+                    collector.add(
+                        "products.yaml",
+                        f"products.{product.product_id}.process_parameters.{stage}.{name}",
+                        "no machine at this stage measures this parameter",
+                        "flag the sensor with `process_parameter: true`, or the stage "
+                        "will record no achieved value and QC will silently evaluate "
+                        "its transfer at the intercept",
+                    )
+
+
 def _check_duplicates(
     collector: IssueCollector, file: str, path: str, ids: list[str], noun: str
 ) -> None:
@@ -787,5 +842,6 @@ def lint_config(config: FactoryConfig) -> list[ConfigIssue]:
     _lint_rca_rules(config, collector, all_tags, root_causes)
     _lint_deviations_and_scenarios(config, collector, event_type_ids, severities, unit_ids)
     _lint_sinks(config, collector)
+    _check_process_parameters_are_measured(config, collector)
 
     return collector.issues

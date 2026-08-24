@@ -1018,6 +1018,217 @@ equipment_classes:
         alarm_high: 82.0
 
 # Plant layout: 10 units, 100 machines. Machine ids are "<id_prefix>-<nnn>".
+  # ---- Containment suite (UNIT-11 to UNIT-14) -----------------------------
+  # Contained equipment for a highly potent compound. The signature difference
+  # is the sign of the pressure: a potent suite is held BELOW the corridor so
+  # that any leak pulls inwards and dust stays in, whereas a sterile suite is
+  # held above so that contamination is pushed out. Getting that backwards is
+  # the sort of error a containment engineer spots immediately.
+  - id: contained_dispensing_isolator
+    duty: coupled
+    stage_duration_min: 110.0
+    name: Contained Dispensing Isolator
+    nominal_rate_per_hour: 180.0
+    pm_interval_hours: 720.0
+    base_reject_rate: 0.0008
+    cleaning_duration_min: 95.0
+    sensors:
+      - tag: containment_pressure
+        unit: Pa
+        baseline: -42.0
+        sigma: 2.1
+        rho: 0.93
+        drift_per_day: 0.06
+        drift_limit: 9.0
+        health_sensitivity: 0.55
+        hard_min: -90.0
+        hard_max: 15.0
+        warn_high: -25.0
+        alarm_high: -15.0
+        state_factors:
+          offline: {mult: 0.05, sigma_mult: 0.4}
+          fault: {mult: 0.3, sigma_mult: 1.6}
+      - tag: hepa_filter_dp
+        unit: Pa
+        baseline: 320.0
+        sigma: 7.5
+        rho: 0.96
+        drift_per_day: 0.42
+        drift_limit: 130.0
+        health_sensitivity: 0.60
+        hard_min: 0.0
+        hard_max: 700.0
+        warn_high: 430.0
+        alarm_high: 500.0
+      - tag: air_changes_per_hour
+        unit: 1/h
+        baseline: 28.0
+        sigma: 0.9
+        rho: 0.90
+        drift_per_day: -0.02
+        drift_limit: 4.0
+        health_sensitivity: -0.40
+        hard_min: 0.0
+        hard_max: 60.0
+        warn_low: 22.0
+        alarm_low: 18.0
+      - tag: dispensed_weight
+        process_parameter: true
+        unit: kg
+        baseline: 9.4
+        sigma: 0.018
+        rho: 0.55
+        drift_per_day: 0.0
+        drift_limit: 0.08
+        health_sensitivity: 0.22
+        hard_min: 0.0
+        hard_max: 30.0
+
+  - id: contained_bin_blender
+    duty: batch
+    stage_duration_min: 65.0
+    name: Contained Bin Blender
+    nominal_rate_per_hour: 200.0
+    pm_interval_hours: 900.0
+    base_reject_rate: 0.0011
+    cleaning_duration_min: 85.0
+    sensors:
+      - tag: containment_pressure
+        unit: Pa
+        baseline: -38.0
+        sigma: 2.0
+        rho: 0.93
+        drift_per_day: 0.05
+        drift_limit: 8.0
+        health_sensitivity: 0.50
+        hard_min: -90.0
+        hard_max: 15.0
+        warn_high: -22.0
+        alarm_high: -12.0
+      - tag: blend_time
+        process_parameter: true
+        unit: min
+        baseline: 24.0
+        sigma: 0.30
+        rho: 0.70
+        drift_per_day: 0.0
+        drift_limit: 1.2
+        health_sensitivity: 0.18
+        hard_min: 0.0
+        hard_max: 90.0
+      - tag: rpm
+        process_parameter: true
+        unit: rpm
+        baseline: 12.0
+        sigma: 0.22
+        rho: 0.80
+        drift_per_day: -0.004
+        drift_limit: 0.9
+        health_sensitivity: -0.30
+        hard_min: 0.0
+        hard_max: 40.0
+
+  - id: contained_tablet_press
+    duty: batch
+    stage_duration_min: 190.0
+    name: Contained Tablet Press with Isolator
+    nominal_rate_per_hour: 165.0
+    pm_interval_hours: 620.0
+    base_reject_rate: 0.0026
+    cleaning_duration_min: 120.0
+    sensors:
+      - tag: containment_pressure
+        unit: Pa
+        baseline: -45.0
+        sigma: 2.4
+        rho: 0.94
+        drift_per_day: 0.07
+        drift_limit: 10.0
+        health_sensitivity: 0.58
+        hard_min: -95.0
+        hard_max: 15.0
+        warn_high: -26.0
+        alarm_high: -14.0
+      - tag: main_compression_force
+        process_parameter: true
+        unit: kN
+        baseline: 11.5
+        sigma: 0.28
+        rho: 0.86
+        drift_per_day: -0.012
+        drift_limit: 1.4
+        health_sensitivity: -0.42
+        hard_min: 0.0
+        hard_max: 40.0
+        warn_low: 9.0
+        alarm_low: 8.0
+      - tag: turret_speed
+        process_parameter: true
+        unit: rpm
+        baseline: 34.0
+        sigma: 0.85
+        rho: 0.88
+        drift_per_day: -0.02
+        drift_limit: 3.0
+        health_sensitivity: -0.30
+        hard_min: 0.0
+        hard_max: 90.0
+      - tag: tablet_weight
+        process_parameter: true
+        unit: mg
+        baseline: 210.0
+        sigma: 2.4
+        rho: 0.72
+        drift_per_day: 0.05
+        drift_limit: 9.0
+        health_sensitivity: 0.36
+        hard_min: 0.0
+        hard_max: 600.0
+
+  - id: contained_coating_pan
+    duty: batch
+    stage_duration_min: 150.0
+    name: Contained Perforated Coating Pan
+    nominal_rate_per_hour: 175.0
+    pm_interval_hours: 780.0
+    base_reject_rate: 0.0018
+    cleaning_duration_min: 105.0
+    sensors:
+      - tag: containment_pressure
+        unit: Pa
+        baseline: -35.0
+        sigma: 1.9
+        rho: 0.92
+        drift_per_day: 0.05
+        drift_limit: 8.0
+        health_sensitivity: 0.48
+        hard_min: -90.0
+        hard_max: 15.0
+        warn_high: -20.0
+        alarm_high: -11.0
+      - tag: spray_rate
+        process_parameter: true
+        unit: g/min
+        baseline: 62.0
+        sigma: 1.6
+        rho: 0.85
+        drift_per_day: -0.03
+        drift_limit: 6.0
+        health_sensitivity: -0.34
+        hard_min: 0.0
+        hard_max: 200.0
+      - tag: inlet_temperature
+        process_parameter: true
+        unit: degC
+        baseline: 56.0
+        sigma: 0.85
+        rho: 0.90
+        drift_per_day: 0.02
+        drift_limit: 4.0
+        health_sensitivity: 0.30
+        hard_min: 0.0
+        hard_max: 110.0
+
 layout:
   UNIT-01:
     - {equipment_class: dispensing_booth,  count: 3, id_prefix: DB,  commissioned_from: 2020-03-01, commissioned_to: 2024-11-30}
@@ -1072,3 +1283,18 @@ layout:
     - {equipment_class: hvac,                  count: 3, id_prefix: AHV, commissioned_from: 2019-01-01, commissioned_to: 2022-12-31}
     - {equipment_class: purified_water_system, count: 2, id_prefix: PWS, commissioned_from: 2019-03-15, commissioned_to: 2023-06-30}
     - {equipment_class: compressed_air_system, count: 2, id_prefix: CAS, commissioned_from: 2019-05-15, commissioned_to: 2023-07-31}
+
+  # Containment suite. Deliberately small: this is clinical supply, not
+  # commercial volume, and every extra machine is another surface to clean to a
+  # health-based exposure limit.
+  UNIT-11:
+    - {equipment_class: contained_dispensing_isolator, count: 1, id_prefix: CDI, commissioned_from: 2025-09-01, commissioned_to: 2025-11-30}
+
+  UNIT-12:
+    - {equipment_class: contained_bin_blender, count: 1, id_prefix: CBB, commissioned_from: 2025-09-15, commissioned_to: 2025-12-15}
+
+  UNIT-13:
+    - {equipment_class: contained_tablet_press, count: 1, id_prefix: CTP, commissioned_from: 2025-10-01, commissioned_to: 2025-12-31}
+
+  UNIT-14:
+    - {equipment_class: contained_coating_pan, count: 1, id_prefix: CCP, commissioned_from: 2025-10-15, commissioned_to: 2026-01-15}

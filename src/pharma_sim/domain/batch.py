@@ -93,6 +93,11 @@ class QcResult:
     unit: str
     sample_size: int
     run_id: str
+    #: Provenance: which analytical method produced this number, and the
+    #: precision it demonstrated in validation. None where the parameter is a
+    #: physical in-process measurement rather than an analytical determination.
+    method_id: str | None = None
+    analytical_rsd: float | None = None
 
     @property
     def failed(self) -> bool:
@@ -117,6 +122,8 @@ class QcResult:
             "machine_id": self.machine_id,
             "unit": self.unit,
             "sample_size": self.sample_size,
+            "method_id": self.method_id,
+            "analytical_rsd": self.analytical_rsd,
             "run_id": self.run_id,
         }
 

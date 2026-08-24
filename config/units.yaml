@@ -80,3 +80,44 @@ units:
     process_stage: STERILIZATION
     worker_count: 10
     environment_sensitivity: 1.6
+
+  # ---- Containment suite --------------------------------------------------
+  # A dedicated, self-contained line for the oncology programme. An OEB 4 API
+  # cannot be handled in the units above: they run several products through
+  # shared equipment, and the health-based exposure limit for a potent compound
+  # makes the carry-over risk unacceptable in both directions.
+  #
+  # Four units rather than one, because a unit performs one process stage. What
+  # makes them a suite is that they share an air-handling boundary and a cleaning
+  # regime, and that no other product is routed through them.
+  #
+  # Headcount is low and the environment sensitivity is high: gowning limits how
+  # many people are in the suite, and a contained line is more sensitive to its
+  # own environment than an open one because the containment IS the environment.
+  - id: UNIT-11
+    name: Contained Dispensing (Oncology Suite)
+    sequence: 11
+    process_stage: CONTAINED_DISPENSING
+    worker_count: 4
+    environment_sensitivity: 1.8
+
+  - id: UNIT-12
+    name: Contained Blending (Oncology Suite)
+    sequence: 12
+    process_stage: CONTAINED_BLENDING
+    worker_count: 4
+    environment_sensitivity: 1.5
+
+  - id: UNIT-13
+    name: Contained Compression (Oncology Suite)
+    sequence: 13
+    process_stage: CONTAINED_COMPRESSION
+    worker_count: 4
+    environment_sensitivity: 1.7
+
+  - id: UNIT-14
+    name: Contained Coating (Oncology Suite)
+    sequence: 14
+    process_stage: CONTAINED_COATING
+    worker_count: 4
+    environment_sensitivity: 1.6
