@@ -23,6 +23,12 @@ About thirty seconds, and you get:
 
 Add `--no-traces` to skip the chromatogram points, which are the bulk of it.
 
+A `README.md` is written into the output directory alongside the data: a short,
+plain-language dataset card for whoever receives the files without this
+repository. Every figure in it — row counts, the analyte count, the injection its
+example plots — is derived from the run that produced it, so it cannot drift away
+from the data it describes.
+
 ---
 
 ## Contents
