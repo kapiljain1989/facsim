@@ -784,6 +784,17 @@ plan:
 
 ### Phase 1 — Laboratory vertical slice
 
+**Partly built.** The analytical half is done and documented in
+[ANALYTICAL_DEVELOPMENT.md](ANALYTICAL_DEVELOPMENT.md): `config/lab/` (five
+files), `pharma_sim.lab` (chromatography, method model, ICH Q2 runner) and
+`scripts/generate_lab_dataset.py`, which produces 243 injections, 586 peaks, 49
+evaluated criteria, 550 audit events and 1.09 M chromatogram points in about
+thirty seconds, under 85 tests. The robustness study discovers the method's weak
+point rather than being told it. Still to do: the formulation DoE, the LIMS
+sample lifecycle, ICH Q1A stability with a shelf-life regression, the OOS
+investigation, blind-integrity testing, the containment suite in
+`config/manufacturing/`, and the Empower and Allotrope adapters.
+
 Nelvorasib: one substance, two formulation branches plus a matching placebo, one
 HPLC assay and related-substances method.
 
