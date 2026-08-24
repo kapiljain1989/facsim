@@ -296,7 +296,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--lifecycle", default="config/lifecycle",
-        help="lifecycle links directory; pass an empty string to run without the spine",
+        help="lifecycle links directory",
     )
     parser.add_argument(
         "--manufacturing-export",
@@ -307,24 +307,22 @@ def main() -> int:
 
     started = time.monotonic()
     config = load_clinical_config(args.config)
-    lifecycle = load_lifecycle_config(args.lifecycle) if args.lifecycle else None
+    lifecycle = load_lifecycle_config(args.lifecycle)
     print(f"running {config.protocol.study_id}")
     out = run_study(
         config,
+        lifecycle,
         seed=args.seed,
-        lifecycle=lifecycle,
         manufacturing_export=args.manufacturing_export,
     )
     print(out.summary())
 
-    if lifecycle is not None:
-        report = verify_spine(out, lifecycle)
-        print()
-        print(report.render())
-        if not report.ok:
-            print("\nthe identity graph does not hold; not writing a dataset",
-                  file=sys.stderr)
-            return 1
+    report = verify_spine(out, lifecycle)
+    print()
+    print(report.render())
+    if not report.ok:
+        print("\nthe identity graph does not hold; not writing a dataset", file=sys.stderr)
+        return 1
 
     root = Path(args.output)
     written = {

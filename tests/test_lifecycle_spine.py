@@ -45,7 +45,7 @@ def lifecycle():
 
 @pytest.fixture(scope="module")
 def study(lifecycle):
-    return run_study(load_clinical_config(CLINICAL), seed=42, lifecycle=lifecycle)
+    return run_study(load_clinical_config(CLINICAL), lifecycle, seed=42)
 
 
 def _batch_export(directory: Path, config, count: int = 8) -> Path:

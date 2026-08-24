@@ -213,16 +213,20 @@ def _permuted_blocks(arms, rng) -> list[str]:
 
 def run_study(
     config: ClinicalConfig,
+    lifecycle: LifecycleConfig,
     seed: int = 42,
     *,
-    lifecycle: LifecycleConfig | None = None,
     manufacturing_export: str | None = None,
 ) -> StudyOutput:
     """Run the whole study and return it in SDTM, ADaM and operational shape.
 
     Args:
-        lifecycle: the spine configuration. Without it the study still runs, but
-            kit numbers are opaque strings that trace to nothing.
+        lifecycle: the spine configuration. Required, not optional. The case
+            report form has a required kit-number item on every dosing cycle, so
+            a study run without drug supply fails its own edit checks on every
+            cycle -- which inflated the query rate fivefold and buried the one
+            site that should have triggered a for-cause monitoring visit. There
+            is one path, and it has drug in it.
         manufacturing_export: a plant export directory. Given one, kits trace to
             batches the plant actually released; without one the spine
             materialises clearly-labelled stubs.
@@ -244,24 +248,22 @@ def run_study(
     _emit_sites(out, protocol.study_id, activations, protocol.enrolment.first_subject_in)
 
     # --------------------------------------------------------------- spine
-    spine: Spine | None = None
-    if lifecycle is not None:
-        spine = build_spine(
-            lifecycle,
-            [
-                (
-                    activation.site_id,
-                    protocol.enrolment.first_subject_in
-                    + timedelta(weeks=activation.ready_week),
-                )
-                for activation in activations
-            ],
-            protocol.enrolment.first_subject_in,
-            rngs.child("lifecycle", "spine"),
-            ids,
-            manufacturing_export=manufacturing_export,
-        )
-        out.spine_linked = spine.linked
+    spine = build_spine(
+        lifecycle,
+        [
+            (
+                activation.site_id,
+                protocol.enrolment.first_subject_in
+                + timedelta(weeks=activation.ready_week),
+            )
+            for activation in activations
+        ],
+        protocol.enrolment.first_subject_in,
+        rngs.child("lifecycle", "spine"),
+        ids,
+        manufacturing_export=manufacturing_export,
+    )
+    out.spine_linked = spine.linked
 
     enrolments = allocate_enrolment(activations, config, rngs.child("clin", "enrolment"))
     arm_sequence = _permuted_blocks(protocol.arms, rngs.child("clin", "randomisation"))
@@ -429,8 +431,7 @@ def run_study(
     out.reconciliations = oversight.reconciliations
     out.lock_events = oversight.lock_events
 
-    if spine is not None:
-        _emit_spine(out, spine)
+    _emit_spine(out, spine)
 
     return out
 
@@ -508,8 +509,8 @@ def _build_context(
     turnover_multiplier: float,
     ids: IdFactory,
     rng,
-    spine: Spine | None,
-    lifecycle: LifecycleConfig | None,
+    spine: Spine,
+    lifecycle: LifecycleConfig,
     out: StudyOutput,
     arm,
 ) -> SubjectContext:
@@ -523,7 +524,7 @@ def _build_context(
     ]
     cycle_facts: dict[int, dict[str, object]] = {}
     dose = 240.0
-    role = lifecycle.randomisation.role_for(arm_id) if lifecycle else None
+    role = lifecycle.randomisation.role_for(arm_id)
 
     for cycle in range(1, cycles + 1):
         visitnum = 100 + cycle
@@ -535,7 +536,7 @@ def _build_context(
             dose -= 60.0
 
         kit = None
-        if spine is not None and role is not None:
+        if role is not None:
             trigger = lifecycle.imp.shipment.resupply_trigger_kits
             if spine.kits_remaining(site_id, role, day) <= trigger:
                 resupply(spine, site_id, role, day, rng)

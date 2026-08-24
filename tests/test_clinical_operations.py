@@ -24,8 +24,10 @@ import pytest
 
 from pharma_sim.clinical.loader import load_clinical_config
 from pharma_sim.clinical.study import run_study
+from pharma_sim.lifecycle.config import load_lifecycle_config
 
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "config" / "clinical"
+LIFECYCLE_DIR = Path(__file__).resolve().parents[1] / "config" / "lifecycle"
 
 
 @pytest.fixture(scope="module")
@@ -35,7 +37,7 @@ def config():
 
 @pytest.fixture(scope="module")
 def study(config):
-    return run_study(config, seed=42)
+    return run_study(config, load_lifecycle_config(LIFECYCLE_DIR), seed=42)
 
 
 class TestFormsAndItems:

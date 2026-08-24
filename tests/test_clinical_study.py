@@ -22,8 +22,10 @@ from pharma_sim.clinical.recist import (
     sum_of_diameters,
 )
 from pharma_sim.clinical.study import run_study
+from pharma_sim.lifecycle.config import load_lifecycle_config
 
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "config" / "clinical"
+LIFECYCLE_DIR = Path(__file__).resolve().parents[1] / "config" / "lifecycle"
 
 
 @pytest.fixture(scope="module")
@@ -32,8 +34,13 @@ def config():
 
 
 @pytest.fixture(scope="module")
-def study(config):
-    return run_study(config, seed=42)
+def lifecycle():
+    return load_lifecycle_config(LIFECYCLE_DIR)
+
+
+@pytest.fixture(scope="module")
+def study(config, lifecycle):
+    return run_study(config, lifecycle, seed=42)
 
 
 class TestSdtmShape:
@@ -289,11 +296,14 @@ class TestEvaluatorsDisagree:
 
 
 class TestReproducibility:
-    def test_two_runs_at_one_seed_agree(self, config):
-        first = run_study(config, seed=7)
-        second = run_study(config, seed=7)
+    def test_two_runs_at_one_seed_agree(self, config, lifecycle):
+        first = run_study(config, lifecycle, seed=7)
+        second = run_study(config, lifecycle, seed=7)
         assert first.rs == second.rs
         assert first.adtte == second.adtte
 
-    def test_a_different_seed_changes_the_study(self, config):
-        assert run_study(config, seed=11).adtte != run_study(config, seed=12).adtte
+    def test_a_different_seed_changes_the_study(self, config, lifecycle):
+        assert (
+            run_study(config, lifecycle, seed=11).adtte
+            != run_study(config, lifecycle, seed=12).adtte
+        )
