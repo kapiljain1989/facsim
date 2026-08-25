@@ -17,9 +17,9 @@ htmlcov/
 
 # Generated data. These are outputs of a run, not inputs; regenerate with
 #   python -m pharma_sim run --days 30
-data/
-exports/
-schemas/
+/data/
+/exports/
+/schemas/
 *.db
 *.db-wal
 *.db-shm
