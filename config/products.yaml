@@ -234,14 +234,16 @@ products:
     manufacturing_process:
       [CONTAINED_DISPENSING, CONTAINED_BLENDING, CONTAINED_COMPRESSION, CONTAINED_COATING, PACKAGING]
     raw_materials:
-      - {material_id: RM-NVRAPI, name: Nelvorasib API (micronised), quantity_kg: 3.75, variability: 0.012}
-      - {material_id: RM-MCC, name: Microcrystalline Cellulose, quantity_kg: 5.20, variability: 0.028}
-      - {material_id: RM-MANN, name: Mannitol 200SD, quantity_kg: 2.60, variability: 0.024}
-      - {material_id: RM-CCS, name: Croscarmellose Sodium, quantity_kg: 0.78, variability: 0.024}
-      - {material_id: RM-HPC, name: Hydroxypropyl Cellulose EXF, quantity_kg: 0.44, variability: 0.022}
+      # Weighed out to the composition DOE-0001 selected: 8.0% disintegrant and
+      # 1.45% lubricant, with the fillers taking up the difference.
+      - {material_id: RM-NVRAPI, name: Nelvorasib API (micronised), quantity_kg: 3.76, variability: 0.012}
+      - {material_id: RM-MCC, name: Microcrystalline Cellulose, quantity_kg: 5.02, variability: 0.028}
+      - {material_id: RM-MANN, name: Mannitol 200SD, quantity_kg: 2.47, variability: 0.024}
+      - {material_id: RM-CCS, name: Croscarmellose Sodium, quantity_kg: 1.05, variability: 0.024}
+      - {material_id: RM-HPC, name: Hydroxypropyl Cellulose EXF, quantity_kg: 0.45, variability: 0.022}
       - {material_id: RM-SLS, name: Sodium Lauryl Sulfate, quantity_kg: 0.13, variability: 0.020}
-      - {material_id: RM-CSD, name: Colloidal Silicon Dioxide, quantity_kg: 0.13, variability: 0.026}
-      - {material_id: RM-MGST, name: Magnesium Stearate, quantity_kg: 0.13, variability: 0.025}
+      - {material_id: RM-CSD, name: Colloidal Silicon Dioxide, quantity_kg: 0.08, variability: 0.026}
+      - {material_id: RM-MGST, name: Magnesium Stearate, quantity_kg: 0.19, variability: 0.025}
       - {material_id: RM-COATNVR, name: Opadry II Beige 85F, quantity_kg: 0.42, variability: 0.020}
     process_parameters:
       CONTAINED_DISPENSING:
@@ -278,13 +280,15 @@ products:
     manufacturing_process:
       [CONTAINED_DISPENSING, CONTAINED_BLENDING, CONTAINED_COMPRESSION, CONTAINED_COATING, PACKAGING]
     raw_materials:
-      - {material_id: RM-MCC, name: Microcrystalline Cellulose, quantity_kg: 7.45, variability: 0.028}
-      - {material_id: RM-MANN, name: Mannitol 200SD, quantity_kg: 4.10, variability: 0.024}
-      - {material_id: RM-CCS, name: Croscarmellose Sodium, quantity_kg: 0.78, variability: 0.024}
-      - {material_id: RM-HPC, name: Hydroxypropyl Cellulose EXF, quantity_kg: 0.44, variability: 0.022}
+      # Appearance-matched to the active, so the disintegrant and lubricant move
+      # with it and the API is replaced by filler.
+      - {material_id: RM-MCC, name: Microcrystalline Cellulose, quantity_kg: 7.28, variability: 0.028}
+      - {material_id: RM-MANN, name: Mannitol 200SD, quantity_kg: 3.97, variability: 0.024}
+      - {material_id: RM-CCS, name: Croscarmellose Sodium, quantity_kg: 1.05, variability: 0.024}
+      - {material_id: RM-HPC, name: Hydroxypropyl Cellulose EXF, quantity_kg: 0.45, variability: 0.022}
       - {material_id: RM-SLS, name: Sodium Lauryl Sulfate, quantity_kg: 0.13, variability: 0.020}
-      - {material_id: RM-CSD, name: Colloidal Silicon Dioxide, quantity_kg: 0.13, variability: 0.026}
-      - {material_id: RM-MGST, name: Magnesium Stearate, quantity_kg: 0.13, variability: 0.025}
+      - {material_id: RM-CSD, name: Colloidal Silicon Dioxide, quantity_kg: 0.08, variability: 0.026}
+      - {material_id: RM-MGST, name: Magnesium Stearate, quantity_kg: 0.19, variability: 0.025}
       - {material_id: RM-COATNVR, name: Opadry II Beige 85F, quantity_kg: 0.42, variability: 0.020}
     process_parameters:
       CONTAINED_DISPENSING:

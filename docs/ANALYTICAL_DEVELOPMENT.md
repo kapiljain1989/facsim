@@ -289,13 +289,20 @@ also a bug once: at a weaker curvature the test sat marginally at its threshold,
 so blend time was held on some seeds and extrapolated to 28 on others, and the
 setpoint it produced flipped.
 
-**The study moved the plant.** The optimum sits at 12.7 kN across seeds, and
-`products.yaml` declared 11.5. Rather than tune the response surfaces until the
+**The study moved the plant, in composition as well as process.** The optimum
+sits at 12.7 kN across seeds, and `products.yaml` declared 11.5. Rather than tune the response surfaces until the
 optimum matched the number already there — which would have been the wrong causal
 direction and would have made the whole exercise decorative — the plant was
 changed to 12.7 and the affected QC transfer intercept recalibrated with it. The
 convention throughout is that nominal inputs land on target, so a setpoint change
 means that intercept changes too.
+
+The composition moved too. Disintegrant and lubricant are factors in the design,
+so leaving the formulation at the levels it was first prototyped at would have
+meant the plant building a tablet the study never evaluated — the selected
+optimum would describe something nobody makes. Both propagate to
+`formulations.yaml`, to the matching placebo, and to the plant's charge sheet,
+and `doe_composition_agreement` checks it.
 
 The direct-compression route wins on all twelve seeds tried. The spray-dried
 dispersion dissolves better and costs a spray dryer, a physical-stability risk on
@@ -401,10 +408,10 @@ Honest about what this slice does not do yet:
   effects clean but leaves two-factor interactions confounded with each other. No
   fold-over or follow-up design resolves them, so an interaction that mattered
   would be invisible.
-- **Composition is not optimised, only the process.** Disintegrant and lubricant
-  levels are DoE factors, but the selected values do not feed back into the
-  prototype compositions in `formulations.yaml` — those stay as declared. Only
-  compression force and blend time propagate to the plant.
+- **The disintegrant answer is pinned to the edge of the range.** The study
+  selects 8.0%, which is the top of what it explored, so its real conclusion is
+  "at least 8%" rather than an optimum found in the interior. Widening the range
+  is the obvious follow-up and has not been done.
 - **The OOS investigation is a template.** Phase I and Phase II conclusions are
   recorded, but every investigation resolves the same way — confirmed
   product-related. A real programme has laboratory errors, invalidated assays,

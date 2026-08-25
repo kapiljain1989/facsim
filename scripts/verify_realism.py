@@ -415,6 +415,30 @@ def process_development_metrics(root: Path) -> dict[str, float]:
     if agreements:
         out["doe_setpoint_agreement"] = stats.fmean(agreements)
 
+    # The composition the study selected has to be the composition being made.
+    # Only propagating the process settings would leave the plant building a
+    # tablet the study never evaluated.
+    prototypes = _read(root / "formulation_prototypes.csv")
+    formulation = next(
+        (
+            candidate
+            for candidate in prototypes
+            if candidate["formulation_id"] == development["formulation"]
+        ),
+        None,
+    )
+    if formulation is not None:
+        composition: list[float] = []
+        for link in development.get("composition", []):
+            chosen = _number(row, f"optimum_{link['doe_factor']}")
+            made = _number(formulation, f"pct_{link['excipient_id']}")
+            if chosen is None or made is None:
+                continue
+            tolerance = float(tolerances.get(link["doe_factor"], 0.0)) or 0.5
+            composition.append(1.0 if abs(chosen - made) <= tolerance else 0.0)
+        if composition:
+            out["doe_composition_agreement"] = stats.fmean(composition)
+
     selected = row.get("selected_formulation")
     if selected:
         out["doe_selected_declared_formulation"] = float(

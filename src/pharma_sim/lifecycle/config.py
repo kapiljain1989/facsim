@@ -42,11 +42,17 @@ class SetpointLink(Strict):
     doe_factor: Ident
 
 
+class CompositionLink(Strict):
+    doe_factor: Ident
+    excipient_id: Ident
+
+
 class ProcessDevelopment(Strict):
     doe_study: Ident
     formulation: Ident
     product_id: Ident
     setpoints: list[SetpointLink]
+    composition: list[CompositionLink] = Field(default_factory=list)
 
 
 class QcMethodLink(Strict):

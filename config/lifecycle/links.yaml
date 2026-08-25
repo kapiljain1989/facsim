@@ -37,6 +37,14 @@ process_development:
   setpoints:
     - {process_parameter: main_compression_force, doe_factor: main_compression_force}
     - {process_parameter: blend_time, doe_factor: blend_time}
+  #: Composition the study selected, and the excipient in the formulation that
+  #: carries it. Propagating only the process settings and leaving the
+  #: composition as first made would mean the plant builds a tablet the study
+  #: never evaluated -- the factors were in the design, so the answers have to be
+  #: used.
+  composition:
+    - {doe_factor: disintegrant_percent, excipient_id: EXC-CCS}
+    - {doe_factor: lubricant_percent, excipient_id: EXC-MGST}
 
 # Which analytical method measures which of the plant's QC parameters. This is
 # the join that lets the plant's QC precision be checked against the precision

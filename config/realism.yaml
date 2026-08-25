@@ -266,6 +266,17 @@ process_development:
       direction runs the right way: the experiment determines the setpoint and
       the plant follows it, not the reverse.
 
+  - metric: doe_composition_agreement
+    low: 1.0
+    high: 1.0
+    why: >-
+      Fraction of the composition factors the study optimised whose selected
+      value is the one the formulation is actually made at. Disintegrant and
+      lubricant were factors in the design, so leaving the composition as first
+      prototyped would mean the plant builds a tablet the study never evaluated
+      and the selected optimum describes something nobody makes. Propagating the
+      process settings and not the composition was exactly that state.
+
   - metric: doe_selected_declared_formulation
     low: 1.0
     high: 1.0

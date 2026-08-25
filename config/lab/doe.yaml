@@ -165,6 +165,10 @@ optimisation:
     # spread would fail for reasons that have nothing to do with the plant.
     main_compression_force: 0.70
     blend_time: 1.00
+    # The composition factors move across studies too, and the disintegrant sits
+    # at the top of its range so its selected value is pinned there.
+    disintegrant_percent: 1.10
+    lubricant_percent: 0.30
 
 studies:
   - study_id: DOE-0001

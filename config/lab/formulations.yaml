@@ -45,15 +45,22 @@ prototypes:
     description: >-
       Simplest route and the one to beat. Relies on disintegrant and a wetting
       agent to get a poorly soluble weak base into solution.
+    # Disintegrant and lubricant levels are the ones DOE-0001 selected, not the
+    # ones the prototype was first made at. The fillers absorb the difference so
+    # the tablet still weighs 210 mg.
+    #
+    # The disintegrant sits at the TOP of the range the study explored, so its
+    # answer is really "at least 8%" -- the range should be widened in a
+    # follow-up rather than treated as an optimum found in the interior.
     composition_percent:
       SUB-0001: 28.6
-      EXC-MCC102: 39.7
-      EXC-MANN: 19.8
-      EXC-CCS: 5.9
+      EXC-MCC102: 38.15
+      EXC-MANN: 18.8
+      EXC-CCS: 8.0
       EXC-HPC: 3.4
       EXC-SLS: 1.0
       EXC-CSD: 0.6
-      EXC-MGST: 1.0
+      EXC-MGST: 1.45
 
   - formulation_id: FRM-0003
     name: Spray-dried amorphous dispersion
@@ -85,13 +92,13 @@ prototypes:
       Appearance-matched to the selected active. The API is replaced by filler,
       so the excipient levels differ while the tablet does not.
     composition_percent:
-      EXC-MCC102: 56.9
-      EXC-MANN: 31.2
-      EXC-CCS: 5.9
+      EXC-MCC102: 55.35
+      EXC-MANN: 30.2
+      EXC-CCS: 8.0
       EXC-HPC: 3.4
       EXC-SLS: 1.0
       EXC-CSD: 0.6
-      EXC-MGST: 1.0
+      EXC-MGST: 1.45
 
 # The tablet the plant has to make. The DoE optimum is checked against these, and
 # against the process parameters declared for PRD-NVR060 in products.yaml.
