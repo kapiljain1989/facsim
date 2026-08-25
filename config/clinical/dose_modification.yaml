@@ -1,0 +1,85 @@
+# What an adverse event does to the dose.
+#
+# This is the file that turns the safety profile into an exposure difference.
+# Rules are evaluated in order and the first match applies, so the permanent
+# discontinuations come before the interruptions -- a rule set where a
+# discontinuation could be pre-empted by an interruption would silently keep
+# subjects on treatment who should have come off it.
+#
+# Dose levels step down and do not step back up. Re-escalation after a toxicity
+# is permitted by some protocols and not by this one, which is the more common
+# choice and the more conservative one.
+
+dose_levels_mg: [240, 180, 120]
+starting_dose_mg: 240
+#: Below the lowest level there is nowhere to go, so the subject comes off.
+discontinue_below_lowest_level: true
+
+rules:
+  # ---- permanent discontinuation ----------------------------------------
+  - rule_id: DM001
+    action: PERMANENT_DISCONTINUATION
+    trigger:
+      special_interest: PNEUMONITIS
+      grade_at_least: 3
+    reason: Grade 3 or higher interstitial lung disease
+
+  - rule_id: DM002
+    action: PERMANENT_DISCONTINUATION
+    trigger:
+      special_interest: HEPATOTOXICITY
+      grade_at_least: 3
+      occurrence_at_least: 2
+    reason: Second occurrence of Grade 3 or higher hepatotoxicity
+
+  - rule_id: DM003
+    action: PERMANENT_DISCONTINUATION
+    trigger:
+      grade_at_least: 4
+      category: NON_HAEMATOLOGICAL
+      occurrence_at_least: 2
+    reason: Second Grade 4 non-haematological event
+
+  # ---- interruption and reduction ----------------------------------------
+  # Non-haematological toxicity comes down at Grade 3. Haematological toxicity is
+  # expected from the chemotherapy backbone and recovers, so it is tolerated to
+  # Grade 4 before the investigational product is reduced -- reducing the study
+  # drug for marrow suppression the backbone caused would be the wrong drug.
+  - rule_id: DM004
+    action: INTERRUPT_AND_REDUCE
+    trigger:
+      grade_at_least: 3
+      category: NON_HAEMATOLOGICAL
+    resume_when: GRADE_1_OR_BASELINE
+    reason: Grade 3 or higher non-haematological toxicity
+
+  - rule_id: DM005
+    action: INTERRUPT_AND_REDUCE
+    trigger:
+      grade_at_least: 4
+      category: HAEMATOLOGICAL
+    resume_when: GRADE_2_OR_BETTER
+    reason: Grade 4 haematological toxicity
+
+  # ---- interruption only -------------------------------------------------
+  - rule_id: DM006
+    action: INTERRUPT
+    trigger:
+      grade_at_least: 3
+      category: HAEMATOLOGICAL
+    resume_when: GRADE_2_OR_BETTER
+    reason: Grade 3 haematological toxicity
+
+# Chemotherapy is delayed rather than reduced for marrow recovery, and a cycle
+# that is delayed past this point is omitted rather than pushed further out.
+chemotherapy:
+  delay_for_grade_at_least: 3
+  category: HAEMATOLOGICAL
+  delay_days: 7
+  maximum_delays_per_cycle: 2
+
+# Relative dose intensity is delivered dose over planned dose across the whole
+# time on treatment. It is derived, and it is the number that should differ
+# between the arms because their toxicity differs.
+relative_dose_intensity:
+  report: true

@@ -145,6 +145,87 @@ def _lint(config: ClinicalConfig, collector: IssueCollector) -> None:
     _lint_crf(config, collector)
     _lint_monitoring(config, collector)
     _lint_tmf(config, collector)
+    _lint_safety(config, collector)
+
+
+def _lint_safety(config: ClinicalConfig, collector: IssueCollector) -> None:
+    safety = config.safety
+    arms = {arm.arm_id for arm in config.protocol.arms}
+    categories = {row.category for row in safety.categories}
+    grades = {row.grade for row in safety.grades}
+    interests = {
+        row.special_interest for row in safety.adverse_events if row.special_interest
+    }
+
+    for event in safety.adverse_events:
+        if event.category not in categories:
+            collector.add("safety.yaml", f"adverse_events.{event.pt}.category",
+                          f"unknown category {event.category}",
+                          f"declared: {', '.join(sorted(categories))}")
+        missing = arms - set(event.incidence)
+        if missing:
+            collector.add(
+                "safety.yaml", f"adverse_events.{event.pt}.incidence",
+                f"no incidence for {', '.join(sorted(missing))}",
+                "every arm needs one, or subjects in that arm cannot have this event",
+            )
+        for arm_id in set(event.incidence) - arms:
+            collector.add("safety.yaml", f"adverse_events.{event.pt}.incidence",
+                          f"{arm_id} is not an arm of this protocol", "")
+        for grade in event.grade_weights:
+            if grade not in grades:
+                collector.add("safety.yaml", f"adverse_events.{event.pt}.grade_weights",
+                              f"unknown grade {grade}", "")
+            if grade == 5:
+                collector.add(
+                    "safety.yaml", f"adverse_events.{event.pt}.grade_weights",
+                    "Grade 5 cannot be drawn from the grade weights",
+                    "a fatal event is decided by the survival model, not by an "
+                    "adverse-event table",
+                )
+        total = sum(event.grade_weights.values())
+        if abs(total - 1.0) > 1e-6:
+            collector.add("safety.yaml", f"adverse_events.{event.pt}.grade_weights",
+                          f"weights sum to {total:.4f}, not 1", "")
+        if event.attribution not in safety.causality.related_probability:
+            collector.add(
+                "safety.yaml", f"adverse_events.{event.pt}.attribution",
+                f"no causality probability declared for {event.attribution}",
+                f"declared: {', '.join(sorted(safety.causality.related_probability))}",
+            )
+
+    modification = config.dose_modification
+    if modification.starting_dose_mg not in modification.dose_levels_mg:
+        collector.add("dose_modification.yaml", "starting_dose_mg",
+                      "the starting dose is not one of the declared levels", "")
+    for rule in modification.rules:
+        if rule.trigger.category and rule.trigger.category not in categories:
+            collector.add("dose_modification.yaml", f"rules.{rule.rule_id}.trigger.category",
+                          f"unknown category {rule.trigger.category}", "")
+        if rule.trigger.special_interest and rule.trigger.special_interest not in interests:
+            collector.add(
+                "dose_modification.yaml", f"rules.{rule.rule_id}.trigger.special_interest",
+                f"no adverse event carries {rule.trigger.special_interest}",
+                f"declared: {', '.join(sorted(interests))}",
+            )
+        if rule.trigger.grade_at_least not in grades:
+            collector.add("dose_modification.yaml", f"rules.{rule.rule_id}.trigger",
+                          f"unknown grade {rule.trigger.grade_at_least}", "")
+    # A discontinuation rule reachable only after an interruption rule has
+    # already matched can never fire, because the first match applies.
+    seen_broad = False
+    for rule in modification.rules:
+        if seen_broad and rule.action == "PERMANENT_DISCONTINUATION":
+            collector.add(
+                "dose_modification.yaml", f"rules.{rule.rule_id}",
+                "a discontinuation rule is declared after a broader interruption rule",
+                "rules are first-match, so this one can never fire; move it earlier",
+            )
+        if rule.action.startswith("INTERRUPT") and rule.trigger.special_interest is None:
+            seen_broad = True
+    if modification.chemotherapy.category not in categories:
+        collector.add("dose_modification.yaml", "chemotherapy.category",
+                      f"unknown category {modification.chemotherapy.category}", "")
 
 
 def _lint_sites(config: ClinicalConfig, collector: IssueCollector) -> None:

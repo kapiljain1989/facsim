@@ -22,6 +22,7 @@ Two seconds, and you get 27 tables:
 | Queries | 330 queries, 1,122 lifecycle events, 132 audited corrections |
 | Monitoring | 48 visits, 102 findings, 10,740 SDV records |
 | Deviations | 61, across seven categories |
+| Safety | 529 adverse events with CTCAE grades, 98 dose modifications, exposure and relative dose intensity per subject |
 | Trial master file | 165 documents, 92% complete, 83% filed on time |
 | Investigational product | 234 lots, 1,920 kits, 1,519 doses |
 | Lock | 5 reconciliations, 5 lock events ending in unblinding |
@@ -41,6 +42,7 @@ batches are labelled `STUB` and lot expiry records `DECLARED` rather than
 - [RECIST: the three details that decide everything](#recist-the-three-details-that-decide-everything)
 - [Where reader disagreement comes from](#where-reader-disagreement-comes-from)
 - [How a site's character propagates](#how-a-sites-character-propagates)
+- [Safety, and why the grade matters](#safety-and-why-the-grade-matters)
 - [The investigational product chain](#the-investigational-product-chain)
 - [Reading the output](#reading-the-output)
 - [Adding a study](#adding-a-study)
@@ -230,6 +232,52 @@ real TMF loses its percentage.
 
 ---
 
+## Safety, and why the grade matters
+
+The adverse-event table is not the interesting part. What matters is that the
+**grade drives the dose**: a Grade 3 non-haematological event interrupts dosing
+and the subject resumes one level down, so a subject who has a bad time on
+treatment receives less drug.
+
+Because the active arm has more Grade 3 events, its relative dose intensity comes
+out lower — 0.844 against 0.903 in the shipped dataset, from 71 Grade 3+ events
+against 27, and 41 dose reductions against 9. Five subjects stopped treatment for
+toxicity rather than progression, and that reaches the disposition form as
+`DSREAS = ADVERSE EVENT`. None of those numbers is configured; they are what
+`safety.yaml` and `dose_modification.yaml` produce.
+
+Three details that a safety reviewer checks immediately:
+
+**Seriousness is not severity.** A Grade 2 event requiring hospitalisation is
+serious; a Grade 3 one managed at home is not. Seriousness is drawn against the
+regulatory criteria — `AESERCRIT` names which one — with grade shifting the
+probability rather than deciding it. Both directions appear in the data.
+
+**Attribution is not arm.** Anaemia, neutropenia and alopecia come from the
+carboplatin and pemetrexed that *both* arms receive, and appear at the same rate
+in each. Diarrhoea and transaminase rises come from the KRAS inhibitor and are
+three times higher on the active arm. A profile where every event is worse on one
+arm has been scaled rather than modelled, and there is a test asserting the
+backbone events match within 10 percentage points.
+
+**Grade 5 is never drawn.** A fatal event belongs to the survival model, which
+ties death to disease burden. Letting an adverse-event table kill subjects would
+double count mortality and break that relationship — so the loader rejects a
+Grade 5 entry in the grade weights outright, and a test confirms it.
+
+Haematological toxicity is treated differently from everything else, because it
+is expected: Grade 3 interrupts dosing but does not reduce it, and only Grade 4
+brings the dose down. Reducing the investigational product for marrow suppression
+the chemotherapy caused would be reducing the wrong drug.
+
+The dose-modification rules are first-match, and the discontinuations are declared
+before the interruptions. The linter checks that ordering, because a
+discontinuation rule placed after a broader interruption rule can never fire —
+subjects who should come off treatment would merely be reduced, and nothing
+downstream would notice.
+
+---
+
 ## The investigational product chain
 
 Every dose resolves back to a manufactured batch:
@@ -322,13 +370,18 @@ convention in both worlds.
 
 Specific about what is not there:
 
-- **No safety domain.** Adverse events, CTCAE grading, serious adverse event
-  reporting and dose modification driven by toxicity are all designed in
-  [the plan](LIFECYCLE_EXTENSION.md) and none of it is built. `dose_modification`
-  in the config vocabulary is not implemented, and the dose reductions in
-  `dosing.csv` are a simple probability rather than a response to a graded
-  adverse event. This is the largest gap in the domain.
-- **No medical coding.** MedDRA and WHODrug are named in the plan and absent.
+- **No medical coding workflow.** A MedDRA subset is declared in `safety.yaml`
+  with the hierarchy coding uses, and events carry `AEDECOD`, `AEPTCD`,
+  `AEBODSYS` and `AESOCCD`. What is absent is the *process*: auto-coding hit
+  rates, manual review, coder queries and a coding dictionary version upgrade.
+  Events are emitted already coded. WHODrug and concomitant medications do not
+  exist at all.
+- **Adverse events do not affect the disease.** Toxicity shortens exposure, and
+  reduced exposure ought to shorten response — but the lesion model is drawn
+  independently of the dose received, so a subject who spent half the study
+  interrupted responds as well as one who took every tablet. Closing that would
+  make relative dose intensity a predictor of PFS, which is the relationship a
+  pharmacometrician would look for first.
 - **No safety database.** SAE reconciliation appears as a reconciliation row
   against an implied external system rather than a modelled one.
 - **The imaging vendor is not an entity.** Central review happens, but the

@@ -1,0 +1,240 @@
+# Adverse events, CTCAE v5.0 grading, and what they do to dosing.
+#
+# Two things make this more than a table of random events.
+#
+# The grade drives the exposure. A Grade 3 non-haematological event interrupts
+# dosing and the subject resumes one dose level down, so a subject who has a bad
+# time on treatment receives less drug — and because the investigational arm has
+# more Grade 3 events, its relative dose intensity comes out lower. That is a
+# consequence of this file rather than a separate setting, and it is the property
+# worth checking first.
+#
+# Attribution separates the chemotherapy backbone from the investigational
+# product. Anaemia and neutropenia come from carboplatin and pemetrexed and
+# appear in both arms at similar rates; diarrhoea and transaminase rises come
+# from the KRAS inhibitor and are markedly higher on the active arm. An AE
+# profile where everything is higher in the treatment arm is the tell that
+# somebody scaled one list by a constant.
+#
+# MedDRA is licensed and not shipped. What is declared here is a subset with the
+# hierarchy that coding actually uses, so the coded output has the right shape.
+
+meddra_version: "26.1"
+ctcae_version: "5.0"
+
+# Grade 5 is death. It is never drawn from the grade weights -- a fatal event is
+# decided by the survival model, not by an adverse-event table -- so the weights
+# below only ever cover 1 to 4.
+grades:
+  - {grade: 1, label: Mild}
+  - {grade: 2, label: Moderate}
+  - {grade: 3, label: Severe or medically significant}
+  - {grade: 4, label: Life-threatening}
+  - {grade: 5, label: Death related to adverse event}
+
+# Categories the dose-modification rules key on. Haematological toxicity is
+# managed differently from everything else: it is expected, it recovers, and it
+# is tolerated to a higher grade before the dose comes down.
+categories:
+  - {category: HAEMATOLOGICAL, description: Marrow suppression from the chemotherapy backbone}
+  - {category: NON_HAEMATOLOGICAL, description: Everything else}
+
+adverse_events:
+  # ---- Investigational product ------------------------------------------
+  - pt_code: "10012735"
+    pt: Diarrhoea
+    soc: Gastrointestinal disorders
+    soc_code: "10017947"
+    category: NON_HAEMATOLOGICAL
+    attribution: INVESTIGATIONAL_PRODUCT
+    incidence: {ARM-A: 0.61, ARM-B: 0.19}
+    grade_weights: {1: 0.44, 2: 0.33, 3: 0.21, 4: 0.02}
+    onset_weeks: {mean: 3.2, sd: 2.6}
+    duration_days: {mean: 11.0, sd: 7.0}
+
+  - pt_code: "10028813"
+    pt: Nausea
+    soc: Gastrointestinal disorders
+    soc_code: "10017947"
+    category: NON_HAEMATOLOGICAL
+    attribution: BOTH
+    incidence: {ARM-A: 0.54, ARM-B: 0.41}
+    grade_weights: {1: 0.52, 2: 0.36, 3: 0.12}
+    onset_weeks: {mean: 1.8, sd: 1.6}
+    duration_days: {mean: 8.0, sd: 5.0}
+
+  - pt_code: "10047700"
+    pt: Vomiting
+    soc: Gastrointestinal disorders
+    soc_code: "10017947"
+    category: NON_HAEMATOLOGICAL
+    attribution: BOTH
+    incidence: {ARM-A: 0.29, ARM-B: 0.24}
+    grade_weights: {1: 0.50, 2: 0.36, 3: 0.14}
+    onset_weeks: {mean: 2.0, sd: 1.8}
+    duration_days: {mean: 5.0, sd: 3.5}
+
+  # Hepatotoxicity is an adverse event of special interest for this class, so it
+  # carries a dedicated dose-modification rule and is reported on its own.
+  - pt_code: "10001551"
+    pt: Alanine aminotransferase increased
+    soc: Investigations
+    soc_code: "10022891"
+    category: NON_HAEMATOLOGICAL
+    attribution: INVESTIGATIONAL_PRODUCT
+    special_interest: HEPATOTOXICITY
+    incidence: {ARM-A: 0.34, ARM-B: 0.09}
+    grade_weights: {1: 0.41, 2: 0.30, 3: 0.24, 4: 0.05}
+    onset_weeks: {mean: 5.5, sd: 3.4}
+    duration_days: {mean: 18.0, sd: 11.0}
+
+  - pt_code: "10003481"
+    pt: Aspartate aminotransferase increased
+    soc: Investigations
+    soc_code: "10022891"
+    category: NON_HAEMATOLOGICAL
+    attribution: INVESTIGATIONAL_PRODUCT
+    special_interest: HEPATOTOXICITY
+    incidence: {ARM-A: 0.28, ARM-B: 0.08}
+    grade_weights: {1: 0.45, 2: 0.31, 3: 0.21, 4: 0.03}
+    onset_weeks: {mean: 5.8, sd: 3.5}
+    duration_days: {mean: 17.0, sd: 10.0}
+
+  - pt_code: "10012378"
+    pt: Decreased appetite
+    soc: Metabolism and nutrition disorders
+    soc_code: "10027433"
+    category: NON_HAEMATOLOGICAL
+    attribution: BOTH
+    incidence: {ARM-A: 0.38, ARM-B: 0.29}
+    grade_weights: {1: 0.55, 2: 0.35, 3: 0.10}
+    onset_weeks: {mean: 3.0, sd: 2.4}
+    duration_days: {mean: 24.0, sd: 15.0}
+
+  # Interstitial lung disease is rare, serious and stops treatment outright. It
+  # is the event this programme would be watched for.
+  - pt_code: "10022611"
+    pt: Interstitial lung disease
+    soc: Respiratory, thoracic and mediastinal disorders
+    soc_code: "10038738"
+    category: NON_HAEMATOLOGICAL
+    attribution: INVESTIGATIONAL_PRODUCT
+    special_interest: PNEUMONITIS
+    incidence: {ARM-A: 0.041, ARM-B: 0.008}
+    grade_weights: {1: 0.16, 2: 0.34, 3: 0.36, 4: 0.14}
+    onset_weeks: {mean: 12.0, sd: 7.5}
+    duration_days: {mean: 30.0, sd: 18.0}
+
+  # ---- Chemotherapy backbone --------------------------------------------
+  # Similar in both arms, because both arms get carboplatin and pemetrexed. An
+  # AE table where these differ by arm has not understood the design.
+  - pt_code: "10002034"
+    pt: Anaemia
+    soc: Blood and lymphatic system disorders
+    soc_code: "10005329"
+    category: HAEMATOLOGICAL
+    attribution: CHEMOTHERAPY
+    incidence: {ARM-A: 0.58, ARM-B: 0.56}
+    grade_weights: {1: 0.31, 2: 0.40, 3: 0.26, 4: 0.03}
+    onset_weeks: {mean: 6.5, sd: 4.0}
+    duration_days: {mean: 26.0, sd: 14.0}
+
+  - pt_code: "10029366"
+    pt: Neutrophil count decreased
+    soc: Investigations
+    soc_code: "10022891"
+    category: HAEMATOLOGICAL
+    attribution: CHEMOTHERAPY
+    incidence: {ARM-A: 0.44, ARM-B: 0.46}
+    grade_weights: {1: 0.22, 2: 0.31, 3: 0.34, 4: 0.13}
+    onset_weeks: {mean: 4.0, sd: 2.2}
+    duration_days: {mean: 12.0, sd: 6.0}
+
+  - pt_code: "10035528"
+    pt: Platelet count decreased
+    soc: Investigations
+    soc_code: "10022891"
+    category: HAEMATOLOGICAL
+    attribution: CHEMOTHERAPY
+    incidence: {ARM-A: 0.33, ARM-B: 0.35}
+    grade_weights: {1: 0.38, 2: 0.32, 3: 0.24, 4: 0.06}
+    onset_weeks: {mean: 4.5, sd: 2.4}
+    duration_days: {mean: 14.0, sd: 7.0}
+
+  - pt_code: "10016256"
+    pt: Fatigue
+    soc: General disorders and administration site conditions
+    soc_code: "10018065"
+    category: NON_HAEMATOLOGICAL
+    attribution: BOTH
+    incidence: {ARM-A: 0.66, ARM-B: 0.59}
+    grade_weights: {1: 0.42, 2: 0.42, 3: 0.16}
+    onset_weeks: {mean: 3.5, sd: 3.0}
+    duration_days: {mean: 40.0, sd: 22.0}
+
+  - pt_code: "10001760"
+    pt: Alopecia
+    soc: Skin and subcutaneous tissue disorders
+    soc_code: "10040785"
+    category: NON_HAEMATOLOGICAL
+    attribution: CHEMOTHERAPY
+    incidence: {ARM-A: 0.21, ARM-B: 0.23}
+    grade_weights: {1: 0.78, 2: 0.22}
+    onset_weeks: {mean: 5.0, sd: 2.0}
+    duration_days: {mean: 90.0, sd: 30.0}
+
+  - pt_code: "10010774"
+    pt: Constipation
+    soc: Gastrointestinal disorders
+    soc_code: "10017947"
+    category: NON_HAEMATOLOGICAL
+    attribution: CHEMOTHERAPY
+    incidence: {ARM-A: 0.24, ARM-B: 0.27}
+    grade_weights: {1: 0.60, 2: 0.32, 3: 0.08}
+    onset_weeks: {mean: 2.5, sd: 2.0}
+    duration_days: {mean: 10.0, sd: 6.0}
+
+  - pt_code: "10034620"
+    pt: Peripheral sensory neuropathy
+    soc: Nervous system disorders
+    soc_code: "10029205"
+    category: NON_HAEMATOLOGICAL
+    attribution: CHEMOTHERAPY
+    incidence: {ARM-A: 0.18, ARM-B: 0.20}
+    grade_weights: {1: 0.55, 2: 0.33, 3: 0.12}
+    onset_weeks: {mean: 10.0, sd: 5.0}
+    duration_days: {mean: 70.0, sd: 35.0}
+
+# What makes an event serious. Any one criterion is enough, which is the
+# regulatory definition rather than a severity threshold -- a Grade 2 event
+# requiring hospitalisation is serious and a Grade 3 one managed at home is not.
+seriousness:
+  criteria:
+    - {criterion: DEATH, weight: 0.04}
+    - {criterion: LIFE_THREATENING, weight: 0.09}
+    - {criterion: HOSPITALISATION, weight: 0.62}
+    - {criterion: DISABILITY, weight: 0.05}
+    - {criterion: MEDICALLY_SIGNIFICANT, weight: 0.20}
+  # Probability that an event of each grade is serious. Grade 4 is nearly always,
+  # Grade 1 essentially never.
+  probability_by_grade: {1: 0.002, 2: 0.021, 3: 0.24, 4: 0.86}
+
+causality:
+  # Investigator assessment of relatedness to the investigational product.
+  # Attribution shifts it: an event the backbone is known to cause is more often
+  # judged unrelated to the study drug.
+  related_probability:
+    INVESTIGATIONAL_PRODUCT: 0.82
+    BOTH: 0.46
+    CHEMOTHERAPY: 0.11
+
+expedited_reporting:
+  # A serious adverse event that is related and not already in the reference
+  # safety information is a SUSAR, and the clock is regulatory.
+  unexpected_probability: 0.22
+  fatal_or_life_threatening_days: 7
+  other_susar_days: 15
+  # Days from the event to the site becoming aware, and from awareness to the
+  # sponsor. Late awareness is what makes a reporting clock miss.
+  site_awareness_days: {mean: 1.4, sd: 1.6}
+  sponsor_notification_days: {mean: 1.8, sd: 2.0}

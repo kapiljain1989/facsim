@@ -29,10 +29,11 @@ from pharma_sim.lifecycle.verify import verify_spine
 _CTMS = ("sites", "site_milestones", "monitoring_visits", "findings", "action_items",
          "deviations")
 _EDC = ("subjects", "forms", "item_data", "queries", "query_events", "item_audit", "sdv")
-_SDTM = ("tu", "tr", "rs", "adtte")
+_SDTM = ("tu", "tr", "rs", "adtte", "ae")
+_SAFETY = ("dose_modifications", "exposure")
 _LOCK = ("reconciliations", "lock_events")
 _IMP = ("imp_lots", "imp_shipments", "imp_kits", "imp_accountability", "dosing", "ex")
-_OPERATIONAL = _CTMS + _EDC + _SDTM + _LOCK + _IMP
+_OPERATIONAL = _CTMS + _EDC + _SDTM + _SAFETY + _LOCK + _IMP
 
 _README = """# {study_id} clinical dataset
 
@@ -70,6 +71,9 @@ two opinions about every patient.
 | `deviations.csv` | {n_deviations} | Where the protocol was not followed |
 | `tmf_documents.csv` | {n_tmf} | The regulatory filing cabinet: every document expected, filed or missing |
 | `reconciliations.csv` / `lock_events.csv` | {n_recs} / {n_locks} | Closing the database down for analysis |
+| `ae.csv` | {n_ae} | Every side effect, its CTCAE severity grade, and what it did to the dose (SDTM) |
+| `dose_modifications.csv` | {n_dm} | Doses interrupted, reduced or stopped, and the event that caused it |
+| `exposure.csv` | {n_exp} | How much drug each patient actually received against how much was planned |
 | `imp_lots.csv` | {n_lots} | Batches of drug packed into kits, with expiry dates |
 | `imp_shipments.csv` | {n_shipments} | Shipments to hospitals, including cold-chain failures |
 | `imp_kits.csv` | {n_kits} | Every kit of drug, and which batch it came from |
@@ -159,6 +163,17 @@ Worth knowing, because these are consequences rather than settings:
   ended. Patients enrolled late have less follow-up, so some are censored simply
   because the data cut arrived. Others are censored because they missed two scans
   in a row before progressing, which makes the progression date unknowable.
+- **Side effects change how much drug patients get.** A severe side effect
+  interrupts dosing and the patient restarts at a lower dose, so
+  `exposure.csv` shows patients on the active arm receiving about 84% of the
+  planned dose against 90% on the control arm. That difference is a consequence
+  of the side-effect profile, not a separate setting. Five patients stopped
+  treatment for toxicity rather than because their cancer grew.
+- **The side effects are not simply worse on the treatment arm.** Anaemia and low
+  blood counts come from the chemotherapy both arms receive, so they appear at
+  the same rate in each. Diarrhoea and liver enzyme rises come from the
+  investigational drug and are three times higher on the active arm. A dataset
+  where everything is worse on one arm has been scaled rather than modelled.
 - **The drug is traceable end to end.** Pick any row in `dosing.csv` and you can
   follow `kit_number` to `imp_kits.csv`, `lot_id` to `imp_lots.csv`, and
   `batch_id` to the batch it was made from. Twelve integrity checks walk that
@@ -277,6 +292,9 @@ def _write_readme(path: Path, out: StudyOutput, config, written: dict[str, int],
             subjects=len(out.subjects),
             arms=len(config.protocol.arms),
             cutoff=config.protocol.analysis.cutoff_weeks_from_fsi,
+            n_ae=f"{written.get('ae', 0):,}",
+            n_dm=f"{written.get('dose_modifications', 0):,}",
+            n_exp=f"{written.get('exposure', 0):,}",
             n_lots=f"{written.get('imp_lots', 0):,}",
             n_shipments=f"{written.get('imp_shipments', 0):,}",
             n_kits=f"{written.get('imp_kits', 0):,}",

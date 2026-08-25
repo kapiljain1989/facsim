@@ -24,6 +24,12 @@ from random import Random
 from pharma_sim.clinical.config import ClinicalConfig
 from pharma_sim.clinical.ctms import SiteActivation, activate_sites, allocate_enrolment
 from pharma_sim.clinical.oversight import OversightOutput, generate_oversight
+from pharma_sim.clinical.safety import (
+    AdverseEvent,
+    Exposure,
+    apply_dose_modifications,
+    generate_events,
+)
 from pharma_sim.clinical.edc import (
     EdcOutput,
     SubjectContext,
@@ -91,6 +97,10 @@ class StudyOutput:
     imp_accountability: list[dict] = field(default_factory=list)
     dosing: list[dict] = field(default_factory=list)
     ex: list[dict] = field(default_factory=list)
+    # Safety
+    ae: list[dict] = field(default_factory=list)
+    dose_modifications: list[dict] = field(default_factory=list)
+    exposure: list[dict] = field(default_factory=list)
     #: True when every kit traces to a batch a real manufacturing run produced.
     spine_linked: bool = False
     #: Ground truth, for the evaluation store only. Never exported operationally.
@@ -125,6 +135,9 @@ class StudyOutput:
             f"  TMF documents {len(self.tmf_documents)}"
             f" — {self.tmf_completeness:.1f}% complete,"
             f" {self.tmf_timeliness:.1f}% filed on time",
+            f"  AE {len(self.ae)}  dose modifications {len(self.dose_modifications)}"
+            f"  serious {sum(1 for r in self.ae if r['AESER'] == 'Y')}"
+            f"  SUSAR {sum(1 for r in self.ae if r['SUSAR'] == 'Y')}",
             f"  IMP lots {len(self.imp_lots)}  shipments {len(self.imp_shipments)}"
             f"  kits {len(self.imp_kits)}  dosing {len(self.dosing)}  EX {len(self.ex)}"
             f"  — batches {'from manufacturing' if self.spine_linked else 'STUBBED'}",
@@ -395,13 +408,30 @@ def run_study(
                     }
 
         assert primary_outcome is not None
+
+        # ---------------------------------------------------------- safety
+        # Time on treatment, before toxicity is allowed to shorten it.
+        on_treatment = min(primary_outcome.week, available)
+        events = generate_events(
+            subject_id, arm_id, on_treatment, config,
+            rngs.child("clin", "safety", subject_id), ids,
+        )
+        planned_cycles = max(1, int(on_treatment // cycle_weeks) + 1)
+        exposure = apply_dose_modifications(
+            subject_id, events, planned_cycles, cycle_weeks, config.dose_modification
+        )
+        _emit_safety(
+            out, protocol.study_id, subject_id, arm, events, exposure,
+            randomised, cycle_weeks, config,
+        )
+
         contexts.append(
             _build_context(
                 subject_id, enrolment.site_id, arm_id, randomised, consent,
                 primary_course, primary_outcome, assessment_facts,
                 activation, enrolment.week, available, cycle_weeks,
                 turnover_multiplier, ids, rngs.child("clin", "cycles", subject_id),
-                spine, lifecycle, out, arm,
+                spine, lifecycle, out, arm, exposure,
             )
         )
 
@@ -517,27 +547,37 @@ def _build_context(
     lifecycle: LifecycleConfig,
     out: StudyOutput,
     arm,
+    exposure: Exposure,
 ) -> SubjectContext:
     """Assemble the EDC view of one subject from what the study already computed."""
-    # Treatment runs until progression, death or the data cut, whichever is first.
+    # Treatment runs until progression, death or the data cut -- or until
+    # toxicity stops it, which is what the exposure already worked out.
     on_treatment = min(outcome.week, available_weeks)
-    cycles = max(1, int(on_treatment // cycle_weeks) + 1)
+    cycles = len(exposure.dose_by_cycle) or max(1, int(on_treatment // cycle_weeks) + 1)
+    if exposure.discontinued_week is not None:
+        on_treatment = min(on_treatment, exposure.discontinued_week)
 
     visits: list[VisitRecord] = [
         VisitRecord(visitnum=0, visit="SCREENING", day=consent, kind="SCREENING")
     ]
     cycle_facts: dict[int, dict[str, object]] = {}
-    dose = 240.0
     role = lifecycle.randomisation.role_for(arm_id)
+    reduced_at = {
+        modification.cycle
+        for modification in exposure.modifications
+        if modification.action == "INTERRUPT_AND_REDUCE"
+    }
+    previous_dose: float | None = None
 
     for cycle in range(1, cycles + 1):
         visitnum = 100 + cycle
         day = randomised + timedelta(weeks=(cycle - 1) * cycle_weeks)
-        # Dose reductions accumulate: once reduced, a subject rarely returns to
-        # full dose, so this steps down rather than fluctuating.
-        adjusted = rng.random() < 0.06
-        if adjusted and dose > 120.0:
-            dose -= 60.0
+        # The dose is whatever the toxicity rules left it at, not a coin flip.
+        dose = exposure.dose_by_cycle.get(cycle, previous_dose or 240.0)
+        adjusted = cycle in reduced_at or (
+            previous_dose is not None and dose != previous_dose
+        )
+        previous_dose = dose
 
         kit = None
         if role is not None:
@@ -623,10 +663,14 @@ def _build_context(
         )
 
     end_of_treatment = randomised + timedelta(weeks=on_treatment)
-    reason = {
-        "PROGRESSION": "DISEASE PROGRESSION",
-        "DEATH": "DEATH",
-    }.get(outcome.reason)
+    # Toxicity that stopped treatment takes precedence over progression: it
+    # happened first, which is why the subject never reached progression on
+    # treatment.
+    reason = (
+        "ADVERSE EVENT"
+        if exposure.discontinued_week is not None
+        else {"PROGRESSION": "DISEASE PROGRESSION", "DEATH": "DEATH"}.get(outcome.reason)
+    )
     if reason is not None:
         visits.append(
             VisitRecord(
@@ -650,6 +694,128 @@ def _build_context(
         query_rate_per_form=activation.query_rate_per_form,
         query_response_days=activation.query_response_days,
     )
+
+
+def _emit_safety(
+    out: StudyOutput,
+    study_id: str,
+    subject_id: str,
+    arm,
+    events: list[AdverseEvent],
+    exposure: Exposure,
+    randomised: date,
+    cycle_weeks: float,
+    config,
+) -> None:
+    """SDTM AE, the dose actions, and the exposure summary."""
+    for sequence, event in enumerate(events, start=1):
+        onset = randomised + timedelta(weeks=event.onset_week)
+        out.ae.append(
+            {
+                "STUDYID": study_id,
+                "DOMAIN": "AE",
+                "USUBJID": subject_id,
+                "AESEQ": sequence,
+                "AETERM": event.pt,
+                "AEDECOD": event.pt,
+                "AEPTCD": event.pt_code,
+                "AEBODSYS": event.soc,
+                "AESOCCD": event.soc_code,
+                # Oncology grades to CTCAE, so AETOXGR is the variable that
+                # matters and AESEV is derived from it rather than the reverse.
+                "AETOXGR": event.grade,
+                "AESEV": {1: "MILD", 2: "MODERATE", 3: "SEVERE", 4: "SEVERE"}.get(
+                    event.grade, "SEVERE"
+                ),
+                "AESER": "Y" if event.serious else "N",
+                "AESERCRIT": event.seriousness_criterion or "",
+                "AEREL": "RELATED" if event.related else "NOT RELATED",
+                "AEACN": _action_taken(event, exposure),
+                "AEOUT": "RECOVERED/RESOLVED",
+                "AESTDTC": _iso(onset),
+                "AEENDTC": _iso(randomised + timedelta(weeks=event.end_week)),
+                "AECAT": event.category,
+                "AESCAN": event.special_interest or "",
+                # Not SDTM. Carried so the expedited reporting story is walkable
+                # without joining a safety database that does not exist here.
+                "ATTRIBUTION": event.attribution,
+                "UNEXPECTED": "Y" if event.unexpected else "N",
+                "SUSAR": "Y" if event.susar else "N",
+                "SITE_AWARE_DTC": _iso(
+                    randomised + timedelta(weeks=event.site_awareness_week)
+                ),
+                "SPONSOR_NOTIFIED_DTC": _iso(
+                    randomised + timedelta(weeks=event.sponsor_notified_week)
+                ),
+                "REPORT_DUE_DTC": (
+                    "" if event.reporting_due_week is None
+                    else _iso(randomised + timedelta(weeks=event.reporting_due_week))
+                ),
+                "REPORTED_ON_TIME": (
+                    "" if event.reported_within_timeline is None
+                    else ("Y" if event.reported_within_timeline else "N")
+                ),
+            }
+        )
+
+    for modification in exposure.modifications:
+        out.dose_modifications.append(
+            {
+                "subject_id": subject_id,
+                "ae_id": modification.ae_id,
+                "rule_id": modification.rule_id,
+                "action": modification.action,
+                "reason": modification.reason,
+                "cycle": modification.cycle,
+                "occurred_on": _iso(randomised + timedelta(weeks=modification.week)),
+                "dose_before_mg": modification.dose_before_mg,
+                "dose_after_mg": modification.dose_after_mg,
+                "interruption_days": modification.interruption_days,
+            }
+        )
+
+    starting = config.dose_modification.starting_dose_mg
+    out.exposure.append(
+        {
+            "subject_id": subject_id,
+            "arm": arm.arm_id,
+            "cycles_received": len(exposure.dose_by_cycle),
+            "final_dose_mg": (
+                max(exposure.dose_by_cycle) and exposure.dose_by_cycle[
+                    max(exposure.dose_by_cycle)
+                ]
+                if exposure.dose_by_cycle else 0.0
+            ),
+            "dose_reductions": sum(
+                1 for m in exposure.modifications
+                if m.action == "INTERRUPT_AND_REDUCE"
+            ),
+            "interruptions": sum(
+                1 for m in exposure.modifications if m.action.startswith("INTERRUPT")
+            ),
+            "interruption_days_total": round(
+                sum(m.interruption_days for m in exposure.modifications), 1
+            ),
+            "discontinued_for_toxicity": "Y" if exposure.discontinued_week else "N",
+            "discontinuation_reason": exposure.discontinuation_reason or "",
+            "relative_dose_intensity": round(
+                exposure.relative_dose_intensity(starting, cycle_weeks * 7.0), 4
+            ),
+        }
+    )
+
+
+def _action_taken(event: AdverseEvent, exposure: Exposure) -> str:
+    """SDTM AEACN, resolved from what actually happened to the dose."""
+    for modification in exposure.modifications:
+        if modification.ae_id != event.ae_id:
+            continue
+        if modification.action == "PERMANENT_DISCONTINUATION":
+            return "DRUG WITHDRAWN"
+        if modification.action == "INTERRUPT_AND_REDUCE":
+            return "DOSE REDUCED"
+        return "DRUG INTERRUPTED"
+    return "DOSE NOT CHANGED"
 
 
 def _emit_sites(

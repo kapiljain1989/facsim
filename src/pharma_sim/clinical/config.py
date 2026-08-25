@@ -29,6 +29,10 @@ __all__ = [
     "MonitoringConfig",
     "TmfConfig",
     "Artifact",
+    "SafetyConfig",
+    "AdverseEventSpec",
+    "DoseModificationConfig",
+    "DoseRule",
     "TumourConfig",
     "RecistConfig",
     "ReaderConfig",
@@ -439,6 +443,115 @@ class TmfConfig(Strict):
         return next((z.name for z in self.zones if z.zone == zone), zone)
 
 
+# --------------------------------------------------------------------------- #
+# safety.yaml
+# --------------------------------------------------------------------------- #
+
+
+class Grade(Strict):
+    grade: int
+    label: str
+
+
+class Category(Strict):
+    category: Ident
+    description: str
+
+
+class AdverseEventSpec(Strict):
+    pt_code: str
+    pt: str
+    soc: str
+    soc_code: str
+    category: Ident
+    #: INVESTIGATIONAL_PRODUCT, CHEMOTHERAPY or BOTH. Drives both the arm
+    #: difference in incidence and how often the investigator calls it related.
+    attribution: str
+    incidence: dict[Ident, Fraction]
+    grade_weights: dict[int, Fraction]
+    onset_weeks: Normal
+    duration_days: Normal
+    special_interest: str | None = None
+
+
+class SeriousnessCriterion(Strict):
+    criterion: str
+    weight: Positive
+
+
+class Seriousness(Strict):
+    criteria: list[SeriousnessCriterion]
+    probability_by_grade: dict[int, Fraction]
+
+
+class Causality(Strict):
+    related_probability: dict[str, Fraction]
+
+
+class ExpeditedReporting(Strict):
+    unexpected_probability: Fraction
+    fatal_or_life_threatening_days: int
+    other_susar_days: int
+    site_awareness_days: Normal
+    sponsor_notification_days: Normal
+
+
+class SafetyConfig(Strict):
+    meddra_version: str
+    ctcae_version: str
+    grades: list[Grade]
+    categories: list[Category]
+    adverse_events: list[AdverseEventSpec]
+    seriousness: Seriousness
+    causality: Causality
+    expedited_reporting: ExpeditedReporting
+
+
+# --------------------------------------------------------------------------- #
+# dose_modification.yaml
+# --------------------------------------------------------------------------- #
+
+
+class DoseTrigger(Strict):
+    grade_at_least: int
+    category: Ident | None = None
+    special_interest: str | None = None
+    occurrence_at_least: int = 1
+
+
+class DoseRule(Strict):
+    rule_id: Ident
+    action: str
+    trigger: DoseTrigger
+    reason: str
+    resume_when: str | None = None
+
+
+class ChemotherapyDelay(Strict):
+    delay_for_grade_at_least: int
+    category: Ident
+    delay_days: int
+    maximum_delays_per_cycle: int
+
+
+class RelativeDoseIntensity(Strict):
+    report: bool = True
+
+
+class DoseModificationConfig(Strict):
+    dose_levels_mg: list[float]
+    starting_dose_mg: float
+    discontinue_below_lowest_level: bool
+    rules: list[DoseRule]
+    chemotherapy: ChemotherapyDelay
+    relative_dose_intensity: RelativeDoseIntensity
+
+    def next_lower(self, dose: float) -> float | None:
+        """The next dose level down, or None when there is nowhere to go."""
+        lower = [level for level in self.dose_levels_mg if level < dose]
+        return max(lower) if lower else None
+
+
 class ClinicalConfig(Strict):
     protocol: ProtocolConfig
     tumour: TumourConfig
@@ -446,6 +559,8 @@ class ClinicalConfig(Strict):
     crf: CrfConfig
     monitoring: MonitoringConfig
     tmf: TmfConfig
+    safety: SafetyConfig
+    dose_modification: DoseModificationConfig
 
 
 CLINICAL_CONFIG_FILES: dict[str, str] = {
@@ -455,4 +570,6 @@ CLINICAL_CONFIG_FILES: dict[str, str] = {
     "crf": "crf",
     "monitoring": "monitoring",
     "tmf_model": "tmf",
+    "safety": "safety",
+    "dose_modification": "dose_modification",
 }
