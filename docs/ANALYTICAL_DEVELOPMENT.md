@@ -1,9 +1,10 @@
 # The analytical development domain
 
-Generates a complete ICH Q2(R2) method validation — chromatograms, peaks, system
-suitability, acceptance criteria and a Part 11 audit trail — for a fictional
-oncology drug substance. This is the first vertical slice of the laboratory
-domain described in [the lifecycle extension plan](LIFECYCLE_EXTENSION.md).
+Generates a complete ICH Q2(R2) method validation and an ICH Q1A stability
+programme — chromatograms, peaks, system suitability, acceptance criteria, a
+Part 11 audit trail, and a fitted shelf life — for a fictional oncology drug
+substance. Part of the laboratory domain described in
+[the lifecycle extension plan](LIFECYCLE_EXTENSION.md).
 
 ```bash
 .venv/bin/python scripts/generate_lab_dataset.py --output data/lab
@@ -20,6 +21,13 @@ About thirty seconds, and you get:
 | `validation_results.csv` | 49 metrics, each with its criterion and verdict |
 | `audit_trail.csv` | 550 events |
 | `chromatogram_points.parquet` | 1,093,743 points — 4,501 per injection |
+| `stability_samples.csv` | 45 — 3 batches across 3 conditions and their timepoints |
+| `stability_results.csv` | 225 measured attributes |
+| `stability_trend.csv` | 225 trend points, per batch, condition and timepoint |
+| `stability_shelf_life.csv` | 3 fitted shelf lives, one per attribute with a limit |
+| `stability_injections.csv` | 180 — every timepoint injected, with its bracketing standard |
+| `stability_oos.csv` | 6 investigations |
+| `stability_certificates.csv`, `stability_reviews.csv` | 45 each |
 
 Add `--no-traces` to skip the chromatogram points, which are the bulk of it.
 
@@ -39,6 +47,7 @@ from the data it describes.
 - [How an injection happens](#how-an-injection-happens)
 - [Where precision comes from](#where-precision-comes-from)
 - [Reading the validation report](#reading-the-validation-report)
+- [Stability, and a shelf life that is fitted](#stability-and-a-shelf-life-that-is-fitted)
 - [Adding a method](#adding-a-method)
 - [Limitations](#limitations)
 
@@ -242,6 +251,54 @@ reported, and performance is then confirmed *at* that level rather than below it
 
 ---
 
+## Stability, and a shelf life that is fitted
+
+Nothing declares a shelf life. Degradation runs on Arrhenius kinetics, the
+samples are pulled on the ICH Q1A schedule, each pull is **injected on the assay
+method** and read back off a synthesised chromatogram, and the shelf life is
+where the ICH Q1E confidence bound on the limiting attribute meets its
+specification. The answer is **27 months, limited by total impurities**, and it
+changes if the activation energy does.
+
+Three things come out of that rather than being arranged:
+
+**The intermediate condition is tested because the data asked for it.** At
+40 °C / 75% RH the acceleration factor is 7.4, and total impurities reach 1.47%
+at six months against a 1.0% limit. That is significant change, which per ICH
+Q1A(R2) is what triggers intermediate-condition testing — so the intermediate
+condition is run rather than tested as a matter of course.
+
+**Impurities are the limiting attribute, not assay.** This is the usual case and
+worth reproducing: a tablet runs out of impurity headroom long before it runs out
+of active. Assay barely moves — under 1% across the whole study.
+
+**The impurity slope is recovered from the chromatograms.** The fitted slope comes
+back at +0.0267 %/month against a declared 0.0267, entirely from integrated peak
+areas. That is the check that the trend is measured rather than drawn.
+
+Two details are worth knowing because they are easy to get wrong.
+
+*Assay must be measured against a standard injected in the same sequence.*
+Referenced instead to the method's nominal response factor, the assay inherited
+the detector's response drift — +0.163 %/month, six times the true degradation
+rate and the wrong sign, so the product appeared to *gain* active as it aged.
+Impurities are reported as area percent of the main peak and were never affected,
+and that asymmetry is what identified the cause. External standardisation exists
+for exactly this.
+
+*At three batches the assay trend is not resolvable.* ICH asks for three primary
+batches. At three, the scatter on the assay is comparable to the total change
+across the study, so the slope estimate is dominated by noise — which is stated
+as a property with its own test, because it is the reason impurities set the shelf
+life. A separate test at twelve batches confirms the degradation is really there.
+
+The shelf life then dates the clinical lots. `imp_lots.csv` in the clinical
+dataset records `expiry_source` as `STABILITY` when it came from this regression
+and `DECLARED` when it fell back to a configured constant — those are different
+claims and the data distinguishes them.
+
+---
+
 ## Adding a method
 
 1. Add any new analyte to `substances.yaml` first — the linter will reject a
@@ -270,20 +327,26 @@ Honest about what this slice does not do yet:
 
 - **One technique.** Dissolution, Karl Fischer water content, residual solvents
   by headspace GC, elemental impurities by ICP-MS and nitrosamines by LC-MS/MS
-  are named in the plan and not built. The chiral method `MTH-0002` is declared
-  and loadable but has no validation defined.
+  are named in the plan and not built as methods. Dissolution and water content
+  appear as stability attributes with their own drift, but they are modelled
+  directly rather than measured from an instrument. The chiral method `MTH-0002`
+  is declared and loadable but has no validation defined.
 - **Peak purity is a proxy.** It is driven by the measured resolution of the
   critical pair rather than by a simulated PDA spectral comparison, which would
   need a spectral model per analyte.
-- **No LIMS or stability yet.** Sample login, test plans, second-person result
-  review, certificates of analysis, ICH Q1A stability pulls, shelf-life
-  regression and OOS investigations are all planned and none exist. The formulation
-  DoE is not built either, so nothing yet connects a method to a product.
-- **Not linked to the plant.** The spine in
-  [the plan](LIFECYCLE_EXTENSION.md#5-the-spine-one-identity-graph) requires that
-  the validated method's precision bound the QC precision the factory sees.
-  Nothing enforces that yet, because the manufacturing side has no
-  `method_id` on its QC results.
+- **LIMS records live inside the stability module.** Sample login, tests,
+  second-person review, certificates of analysis and OOS investigations are
+  emitted, but from `stability.py`, because it is currently their only consumer.
+  When release testing uses the same lifecycle they should move to their own
+  module rather than be duplicated. There is no LIMS around routine release
+  testing today.
+- **No formulation DoE.** Nothing yet connects a formulation to the plant's
+  process parameters, which are declared numbers with no development history
+  behind them. This is the last unbuilt piece of the laboratory domain.
+- **The OOS investigation is a template.** Phase I and Phase II conclusions are
+  recorded, but every investigation resolves the same way — confirmed
+  product-related. A real programme has laboratory errors, invalidated assays,
+  retests and resamples, and none of those outcomes occur here.
 - **Gradient methods are modelled as isocratic.** Retention responds to the
   organic percentage as a single number rather than to a gradient table, which is
   adequate for how conditions shift peaks but would not survive a conversation

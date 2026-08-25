@@ -9,8 +9,12 @@ The worked programme is **oncology**: a covalent KRAS G12C inhibitor in
 non-small-cell lung cancer, from preformulation through a randomised Phase II to
 submission-ready datasets.
 
-> Status: plan, not yet built. Decisions recorded here are the ones that were
-> explicitly chosen; open questions are marked as such.
+> Status: **substantially built.** Phases 0 to 2 are done and all three spine
+> links hold. What remains is the formulation DoE, a clinical safety domain, and
+> the depth items in Phase 3. Section [11](#11-build-phases) records what is
+> built against what was planned; the domain documentation is in
+> [ANALYTICAL_DEVELOPMENT.md](ANALYTICAL_DEVELOPMENT.md) and
+> [CLINICAL_DEVELOPMENT.md](CLINICAL_DEVELOPMENT.md).
 
 ---
 
@@ -277,6 +281,10 @@ This is the first thing to build and the thing every later phase hangs off.
 
 Concrete invariants the engine must hold, each one checkable by
 `verify-integrity`:
+
+All three links now hold, checked by thirteen `verify-spine` checks. The
+invariants below are stated as they were planned; where one is enforced
+differently in practice that is noted.
 
 1. Every `qc_results.method_id` in manufacturing resolves to a **validated**
    `lab.methods` row, and the QC result's precision is bounded by the
@@ -816,6 +824,16 @@ HPLC assay and related-substances method.
   parameters.
 
 ### Phase 2 — Clinical vertical slice
+
+**Built**, and beyond the original slice: the RECIST lesion model with dual
+evaluator assessment, PFS with reproducible censoring, and then the whole
+operational layer — sites with performance archetypes driving enrolment, CRF
+forms and items over the existing visits, edit checks firing queries with
+re-query, risk-based SDV, monitoring with a for-cause trigger, protocol
+deviations, an eTMF at 92% complete, and database lock through to unblinding.
+Documented in [CLINICAL_DEVELOPMENT.md](CLINICAL_DEVELOPMENT.md). Not built: the
+safety domain, medical coding, and the molecular pre-screening funnel.
+
 
 Study NVR-101-201 on the drug product from Phase 1.
 

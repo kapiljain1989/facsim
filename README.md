@@ -1,25 +1,38 @@
-# Pharmaceutical Factory Simulator
+# Pharmaceutical Development and Manufacturing Simulator
 
 A stateful, event-driven, causally coherent simulation of a pharmaceutical
-manufacturing plant. It generates synthetic industrial data — sensor telemetry,
-production records, batches, QC results, failures, maintenance, deviations, RCA
-and CAPA — for ML development, predictive maintenance, anomaly detection,
-production analytics, OEE, RCA/CAPA research and digital-twin work.
+programme end to end: the analytical laboratory that develops and validates the
+methods, the clinical trial that tests the drug, and the plant that makes it.
 
-It is not a random-data generator. Every layer is downstream of the one above it:
-a degrading bearing shifts the sensor stream, the shifted stream shifts the
-recorded process parameters, and the QC result moves because of it.
+It is not a random-data generator. Every layer is downstream of the one above it,
+and that holds across domains as well as within them. A degrading bearing shifts
+the sensor stream, the shifted stream shifts the recorded process parameters, and
+the QC result moves because of it — and that QC result's precision is bounded by
+the precision the analytical method demonstrated in its validation, while the
+batch it released is the batch packed into the kit a trial subject was dispensed.
+
+Three domains and the joins between them:
+
+| | |
+|---|---|
+| 🏭 **Manufacturing** | sensor telemetry, batches, QC, failures, maintenance, deviations, RCA and CAPA. The deepest-modelled domain and the rest of this README is mostly about it |
+| 🔬 **Analytical development** | chromatograms as signal traces, peak integration, ICH Q2 method validation, ICH Q1A stability with a fitted shelf life. [Documentation](docs/ANALYTICAL_DEVELOPMENT.md) |
+| 🧪 **Clinical development** | a randomised oncology trial: RECIST lesion model with dual reader assessment, EDC, CTMS, eTMF, database lock, and SDTM/ADaM output. [Documentation](docs/CLINICAL_DEVELOPMENT.md) |
+| 🔗 **The lifecycle spine** | the joins, and thirteen checks that walk them. [The plan](docs/LIFECYCLE_EXTENSION.md) |
 
 > **This is a simulation and synthetic-data platform, not a GMP
-> production-control system.** No claim of regulatory compliance is made or
-> implied. Suitable for research, software development, AI/ML testing,
-> demonstrations and analytics.
+> production-control system, and not a regulatory record.** No claim of
+> compliance is made or implied. The investigational molecule and the clinical
+> study are fictional; no real patient data appears anywhere. Suitable for
+> research, software development, AI/ML testing, demonstrations and analytics.
 
 ---
 
 ## Contents
 
 - [Quick start](#quick-start)
+- [The three domains](#the-three-domains)
+- [The lifecycle spine](#the-lifecycle-spine)
 - [What it produces](#what-it-produces)
 - [The three design principles](#the-three-design-principles)
 - [Configuration](#configuration)
@@ -63,17 +76,94 @@ Watch the plant run as a live feed, piped into anything:
 
 ---
 
+## The three domains
+
+Each generates its own dataset with one command, and each writes a dataset card
+alongside the data.
+
+```bash
+# Manufacturing — the plant
+.venv/bin/python scripts/generate_dataset.py --days 45 --output data/plant
+
+# Analytical development — method validation and stability
+.venv/bin/python scripts/generate_lab_dataset.py --output data/lab \
+    --manufacturing-export data/plant
+
+# Clinical development — the trial
+.venv/bin/python scripts/generate_clinical_dataset.py --output data/clinical \
+    --manufacturing-export data/plant --lab-export data/lab
+```
+
+Run in that order and the domains link up. Run any one alone and it still
+produces a complete, internally consistent dataset — but it says so. A clinical
+dataset generated without a plant export labels every batch `STUB`, and a lot
+whose expiry came from a configured constant rather than a fitted shelf life
+records `DECLARED` rather than `STABILITY`. Those are different claims and the
+data distinguishes them, because a lineage claim that silently degrades is worse
+than none.
+
+| Domain | What comes out | Documentation |
+|---|---|---|
+| Manufacturing | ~6,000 batches, ~38,000 QC results, telemetry, failures, deviations, RCA, CAPA | this README, and [configuring a factory](docs/CONFIGURING_A_FACTORY.md) |
+| Analytical | 243 injections, 586 peaks, 1.09 M chromatogram points, 49 evaluated ICH Q2 criteria, 45 stability samples, a fitted 27-month shelf life | [ANALYTICAL_DEVELOPMENT.md](docs/ANALYTICAL_DEVELOPMENT.md) |
+| Clinical | 120 subjects, 6 sites, 5,900 case report forms, 30,000 item values, SDTM TU/TR/RS, ADaM ADTTE, eTMF at 92% complete | [CLINICAL_DEVELOPMENT.md](docs/CLINICAL_DEVELOPMENT.md) |
+
+---
+
+## The lifecycle spine
+
+The joins are the part nobody's demo data has, and they are checked rather than
+asserted:
+
+```
+ SUBSTANCE  Nelvorasib (fictional, INN-stem conforming)
+     |
+     +-- METHOD  MTH-0001, validated to ICH Q2(R2)
+     |      |
+     |      +-- bounds the precision of the plant's QC result
+     |      +-- measures every stability timepoint
+     |
+     +-- DRUG PRODUCT  active tablet + matching placebo
+            |
+            +-- made in a dedicated containment suite (OEB 4)
+            +-- BATCH --- QP released ---+
+                   |                     |
+                   +-- STABILITY --> fitted shelf life --> LOT EXPIRY
+                   |
+                   +-- IMP LOT -> KIT -> SHIPMENT -> SITE -> SUBJECT DOSE
+                                                              |
+                                                        SDTM EX -> eCTD
+```
+
+`verify-spine` walks all of it. Thirteen checks, ordered by consequence — the
+first is that a subject received the treatment they were randomised to, because
+nothing else matters if that fails. Each check has a test confirming it fails
+against a graph broken in that one way.
+
+```
+spine integrity (manufacturing batches)
+  ok    dispensed product matches arm            1,519 checked
+  ok    each kit dispensed once                  1,519 checked
+  ok    kit resolves to lot and batch            1,920 checked
+  ok    not dispensed before receipt             1,519 checked
+  ok    no expired kit dispensed                 1,519 checked
+  ...
+  13/13 checks passed
+```
+
+---
+
 ## What it produces
 
-A 30-day run of the shipped configuration, measured:
+The manufacturing domain, over a 30-day run of the shipped configuration:
 
 | | |
 |---|---|
-| Plant | 1 plant, 10 production units, 100 machines, 584 sensors |
+| Plant | 1 plant, 14 production units, 104 machines — ten commercial units and a four-unit containment suite for the oncology programme |
 | People | 1 plant manager, 10 unit managers, 100 unit workers, 8 technicians, 4 QC analysts |
 | Telemetry | ~25 M sensor readings at the default 60 s cadence |
 | Production | ~90 shift instances, ~9,000 production records with OEE, ~10,000 OEE snapshots |
-| Batches | ~700 completed across 5 products, with full stage-by-stage genealogy |
+| Batches | ~700 completed across 7 products, with full stage-by-stage genealogy |
 | Quality | ~9,000 QC results, computed from achieved process conditions |
 | Reliability | ~50 degradation episodes, ~35 faults, some averted by maintenance, ~300 maintenance actions |
 | Quality management | ~250 deviations, ~50 RCA investigations, ~50 CAPAs with verification |
@@ -654,7 +744,8 @@ understanding of what it does and does not model.
 
 ```
 pharma_factory_simulator/
-├── config/                       every YAML file above, plus examples/minimal_factory/
+├── config/                       manufacturing YAML, plus lab/, clinical/,
+│                                 lifecycle/ and examples/minimal_factory/
 ├── src/pharma_sim/
 │   ├── config/                   Pydantic models, loader, linter, fingerprint, drivers
 │   ├── registry/                 states, event types, equipment, failures, QC, topology
@@ -664,6 +755,12 @@ pharma_factory_simulator/
 │   ├── domain/                   plant, machine, sensor, plc, employee, shift, batch,
 │   │                             qc, oee, environment, history, failure_engine,
 │   │                             maintenance, quality_management, ground_truth
+│   ├── lab/                      chromatography, method model, ICH Q2 validation,
+│   │                             ICH Q1A stability and shelf-life fit
+│   ├── clinical/                 RECIST derivation, lesion model, survival, CTMS,
+│   │                             EDC, oversight, study assembly
+│   ├── lifecycle/                the spine: batch to lot to kit to dose, and
+│   │                             the checks that walk it
 │   ├── storage/                  schema, protocols, facade, factory, sqlite, postgres,
 │   │                             clickhouse, timescale, parquet
 │   ├── streaming/                base, router, jsonl_sink, mqtt_sink
@@ -672,9 +769,10 @@ pharma_factory_simulator/
 │   └── __main__.py               CLI
 │   ├── api/                      FastAPI app, read-only service layer, live hub
 │   │   └── static/               dashboard: index.html, app.js, charts.js, styles.css
-├── scripts/                      initialize_factory, generate_dataset,
-│                                 mqtt_consumer, trace_batch
-├── tests/                        314 tests
+├── scripts/                      generate_dataset, generate_lab_dataset,
+│                                 generate_clinical_dataset, phase0_digest,
+│                                 initialize_factory, mqtt_consumer, trace_batch
+├── tests/                        592 tests
 ├── docker/mosquitto.conf
 ├── Dockerfile
 └── docker-compose.yml            postgres+timescale, clickhouse, mosquitto
@@ -694,9 +792,20 @@ other packages.
 .venv/bin/python -m pytest -q -m "postgres or clickhouse"   # needs containers
 ```
 
-301 tests run with no infrastructure (including the API and the live WebSocket);
+592 tests run with no infrastructure, including the API and the live WebSocket;
 13 more cover PostgreSQL, TimescaleDB and ClickHouse and are skipped
 automatically when those services are unreachable.
+
+Two of them are worth knowing about because they defend properties the type
+system cannot:
+
+* `test_determinism.py` shells out with `PYTHONHASHSEED` set to three different
+  values. In-process tests structurally cannot catch hash-order dependence — the
+  seed is fixed for the life of an interpreter — and a single `tuple({...})` in
+  the factory builder was once enough to make every run irreproducible.
+* `test_lifecycle_spine.py` has a test per spine check confirming it fails
+  against a graph broken in that one way, so a check cannot quietly become
+  vacuous.
 
 Counts are configuration, so the suite asserts against *loaded config* rather
 than literals — a config edit must not break the tests. A separate test checks
