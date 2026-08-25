@@ -6,7 +6,7 @@ plant_manager_name: R. Deshmukh
 
 simulation:
   seed: 42
-  start_time: 2026-01-01T06:00:00
+  start_time: 2026-02-23T06:00:00
   # Pacing for --live / --speed runs. Fast-forward ignores this entirely.
   speed_sim_minutes_per_real_second: 60.0
 
