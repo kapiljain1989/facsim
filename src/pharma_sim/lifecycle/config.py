@@ -55,6 +55,7 @@ class ImpConfig(Strict):
     tablets_per_kit: int
     kits_per_lot: int
     lot_expiry_months: int
+    shelf_life_protocol: Ident | None = None
     releasable_dispositions: list[str]
     shipment: ShipmentConfig
 

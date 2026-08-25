@@ -1,0 +1,109 @@
+# ICH Q1A(R2) stability, and the shelf life that comes out of it.
+#
+# Shelf life is FITTED, not declared. Degradation runs on Arrhenius kinetics, the
+# samples are pulled on the ICH schedule, each pull is injected on the assay
+# method and read back off a real chromatogram, and the shelf life is where the
+# regression on the limiting attribute meets its specification. Nothing here says
+# "24 months" -- that is the answer, and it can come out different.
+#
+# The kinetics are calibrated so that total impurities, not assay, is the
+# limiting attribute. That is the usual case and it is worth reproducing: a
+# tablet almost never runs out of active before it runs out of impurity headroom.
+
+conditions:
+  - condition_id: LONG_TERM
+    label: 25 C / 60% RH
+    temperature_c: 25.0
+    humidity_pct: 60.0
+    timepoints_months: [0, 3, 6, 9, 12, 18, 24, 36]
+  # Tested only if the accelerated condition shows significant change, which is
+  # what ICH Q1A asks for and what these kinetics produce.
+  - condition_id: INTERMEDIATE
+    label: 30 C / 65% RH
+    temperature_c: 30.0
+    humidity_pct: 65.0
+    timepoints_months: [0, 6, 9, 12]
+  - condition_id: ACCELERATED
+    label: 40 C / 75% RH
+    temperature_c: 40.0
+    humidity_pct: 75.0
+    timepoints_months: [0, 3, 6]
+
+# k(T) = k_ref * exp(-(Ea/R) * (1/T - 1/T_ref)), multiplied by a humidity term.
+# 88 kJ/mol sits in the usual range for pharmaceutical degradation and gives an
+# acceleration factor of 7.4 at 40 C / 75% RH, and 2.0 at the intermediate
+# condition -- both close to what real programmes report.
+kinetics:
+  substance: SUB-0001
+  activation_energy_kj_mol: 88.0
+  reference_temperature_c: 25.0
+  reference_humidity_pct: 60.0
+  humidity_exponent: 1.35
+  #: Percent of label claim degraded per month at the reference condition.
+  reference_rate_percent_per_month: 0.0267
+  # Where the degraded active goes. The warhead hydrolysis product dominates,
+  # which is what the substance record's relative rates already imply.
+  degradant_split:
+    SUB-0002: 0.45
+    SUB-0003: 0.32
+    SUB-0005: 0.23
+  # Levels at release. The des-fluoro impurity is a process impurity: it is
+  # present from manufacture and does not grow on storage, which is exactly why
+  # it is classified separately from the degradants.
+  release_levels_percent:
+    SUB-0002: 0.08
+    SUB-0003: 0.06
+    SUB-0004: 0.09
+    SUB-0005: 0.05
+
+# Dissolution and water content drift on storage too, more slowly, and are
+# tested at every pull because a coated tablet can harden.
+secondary_attributes:
+  dissolution:
+    release_value: 88.0
+    change_per_month_at_reference: -0.22
+    lower_limit: 80.0
+  water_content:
+    release_value: 2.6
+    change_per_month_at_reference: 0.018
+    upper_limit: 4.0
+
+specification:
+  assay: {lower: 95.0, upper: 105.0}
+  total_impurities: {upper: 1.0}
+  # Higher than the ICH Q3B default because ICH S9 applies: this is an
+  # anticancer product for advanced disease, where impurity qualification
+  # thresholds are set against the clinical context rather than the default.
+  individual_impurity: {upper: 0.50}
+
+shelf_life:
+  fit_condition: LONG_TERM
+  # ICH Q1E: the shelf life is where the one-sided 95% confidence bound on the
+  # regression meets the specification, not where the mean line does.
+  confidence: 0.95
+  maximum_months: 36
+  round_down_to_months: 3
+  # A result outside specification at a timepoint is out of specification and
+  # gets investigated; it does not simply truncate the shelf life.
+  investigate_out_of_specification: true
+
+# Significant change at the accelerated condition, per ICH Q1A(R2) 2.2.7.
+significant_change:
+  assay_change_percent: 5.0
+  any_specification_exceeded: true
+
+protocols:
+  - protocol_id: STB-0001
+    product_id: PRD-NVR060
+    method_id: MTH-0001
+    title: Stability of Nelvorasib 60 mg film-coated tablets
+    # Three primary batches, as ICH Q1A requires. They are real released batches
+    # from the plant, chosen by the study rather than invented here.
+    batches: 3
+    package: HDPE bottle, 60 count, 1 g silica gel desiccant
+    orientations: [UPRIGHT]
+    replicates_per_pull: 2
+    # Analyst and instrument rotate across pulls over three years, which is what
+    # makes a stability trend carry more scatter than a single release test.
+    analysts: [ANL-01, ANL-02, ANL-03]
+    instruments: [INS-HPLC-01, INS-HPLC-02]

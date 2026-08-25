@@ -38,7 +38,12 @@ imp:
   # Four 60 mg tablets a day for a 28-day cycle, plus an overage.
   tablets_per_kit: 116
   kits_per_lot: 850
+  # FALLBACK only. Lot expiry should come from the fitted shelf life in the
+  # stability programme, and does when a laboratory export is supplied. This
+  # number is what gets used otherwise, and every lot says which of the two it
+  # was given -- a declared expiry and a fitted one are not the same claim.
   lot_expiry_months: 24
+  shelf_life_protocol: STB-0001
   # Only a batch the qualified person has released can be packed.
   releasable_dispositions: [RELEASED, ACCEPTED, GOOD]
   shipment:

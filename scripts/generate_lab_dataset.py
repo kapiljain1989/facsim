@@ -26,6 +26,7 @@ from typing import Any, Iterable
 from pharma_sim.engine.ids import IdFactory
 from pharma_sim.engine.rng import RngRegistry
 from pharma_sim.lab.loader import load_lab_config
+from pharma_sim.lab.stability import StabilityOutput, run_stability
 from pharma_sim.lab.validation import ValidationOutput, ValidationRunner
 
 #: Written as CSV. Order is deliberate: dimensions before the facts that
@@ -45,6 +46,16 @@ _TABLES = (
     "system_suitability",
     "validation_results",
     "audit_trail",
+    "stability_samples",
+    "stability_tests",
+    "stability_results",
+    "stability_reviews",
+    "stability_certificates",
+    "stability_oos",
+    "stability_trend",
+    "stability_shelf_life",
+    "stability_injections",
+    "stability_peaks",
 )
 
 
@@ -293,6 +304,33 @@ def _write_readme(
     )
 
 
+def _stability_batches(config, export: str | None):
+    """Which batches go on stability.
+
+    Real released batches of the product when a plant export is supplied. ICH
+    requires three primary batches and they should be product that exists;
+    placeholders are labelled so nothing reads them as real.
+    """
+    from datetime import date
+
+    product_ids = {p.product_id for p in config.stability.protocols}
+    if export:
+        from pharma_sim.lifecycle.spine import load_released_batches
+        from pharma_sim.lifecycle.config import load_lifecycle_config
+
+        lifecycle = load_lifecycle_config("config/lifecycle")
+        batches = [
+            (batch.batch_id, batch.released_on)
+            for batch in load_released_batches(export, lifecycle)
+            if batch.product_id in product_ids
+        ]
+        if batches:
+            return batches
+        print(f"no batches of {sorted(product_ids)} in {export}; using placeholders",
+              file=sys.stderr)
+    return [(f"STUB-BATCH-{index:04d}", date(2026, 1, 15)) for index in range(1, 4)]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -302,6 +340,11 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--no-traces", action="store_true", help="skip the chromatogram points"
+    )
+    parser.add_argument(
+        "--manufacturing-export",
+        help="a plant export. Stability runs on real released batches when given; "
+             "without one the batch ids are placeholders labelled as such",
     )
     parser.add_argument(
         "--validation", action="append",
@@ -338,6 +381,19 @@ def main() -> int:
         print(output.summary())
         print()
 
+    # ---------------------------------------------------------------- stability
+    stability_batches = _stability_batches(config, args.manufacturing_export)
+    stability_outputs: list[StabilityOutput] = []
+    for protocol in config.stability.protocols:
+        print(f"running {protocol.protocol_id}  {protocol.title}")
+        result = run_stability(
+            config, protocol, stability_batches, RngRegistry(args.seed), ids,
+            keep_traces=False,
+        )
+        stability_outputs.append(result)
+        print(result.summary())
+        print()
+
     root = Path(args.output)
     combined: dict[str, list[dict[str, Any]]] = _reference_rows(config)
     combined["sequences"] = [row for out in outputs for row in out.sequences]
@@ -346,6 +402,32 @@ def main() -> int:
     combined["system_suitability"] = [row for out in outputs for row in out.suitability]
     combined["validation_results"] = [row for out in outputs for row in out.results]
     combined["audit_trail"] = [row for out in outputs for row in out.audit]
+    combined["stability_samples"] = [r for o in stability_outputs for r in o.samples]
+    combined["stability_tests"] = [r for o in stability_outputs for r in o.tests]
+    combined["stability_results"] = [r for o in stability_outputs for r in o.results]
+    combined["stability_reviews"] = [r for o in stability_outputs for r in o.reviews]
+    combined["stability_certificates"] = [r for o in stability_outputs for r in o.certificates]
+    combined["stability_oos"] = [r for o in stability_outputs for r in o.out_of_specification]
+    combined["stability_trend"] = [r for o in stability_outputs for r in o.trend]
+    combined["stability_injections"] = [r for o in stability_outputs for r in o.injections]
+    combined["stability_peaks"] = [r for o in stability_outputs for r in o.peaks]
+    # The fitted shelf life, which is what dates a clinical lot.
+    combined["stability_shelf_life"] = [
+        {
+            "protocol_id": o.protocol_id,
+            "attribute": life.attribute,
+            "shelf_life_months": life.months,
+            "limit": life.limit,
+            "intersection_months": round(life.intersection_months, 2),
+            "slope_per_month": round(life.slope_per_month, 6),
+            "residual_sd": round(life.residual_sd, 5),
+            "points": life.points,
+            "limiting": life.attribute == o.limiting_attribute,
+            "limited_by_study_length": life.limited_by_study_length,
+        }
+        for o in stability_outputs
+        for life in o.shelf_lives
+    ]
 
     written: dict[str, int] = {}
     for name in _TABLES:

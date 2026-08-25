@@ -219,7 +219,7 @@ class TestSpineIntegrity:
     def test_all_checks_pass_on_the_generated_study(self, study, lifecycle):
         report = verify_spine(study, lifecycle)
         assert report.ok, report.render()
-        assert len(report.checks) == 12
+        assert len(report.checks) == 13
 
     def test_the_report_says_whether_lineage_is_real(self, study, lifecycle):
         report = verify_spine(study, lifecycle)
@@ -337,5 +337,43 @@ class TestIdentifierUniqueness:
         report = verify_spine(broken, lifecycle)
         assert any(
             not check.passed and "shipment identifiers unique" in check.name
+            for check in report.checks
+        )
+
+
+class TestExpiryProvenance:
+    """Link C. A lot dated from a fitted shelf life and one dated from a
+    configured constant are different claims, and the dataset has to say which."""
+
+    def test_without_a_shelf_life_the_expiry_is_declared(self, lifecycle):
+        spine = build_spine(lifecycle, SITES, FIRST_IN, Random(3), IdFactory())
+        assert {lot.expiry_source for lot in spine.lots} == {"DECLARED"}
+        assert {lot.shelf_life_months for lot in spine.lots} == {
+            float(lifecycle.imp.lot_expiry_months)
+        }
+
+    def test_a_fitted_shelf_life_is_used_and_labelled(self, lifecycle):
+        spine = build_spine(
+            lifecycle, SITES, FIRST_IN, Random(3), IdFactory(), shelf_life_months=27.0
+        )
+        assert {lot.expiry_source for lot in spine.lots} == {"STABILITY"}
+        assert {lot.shelf_life_months for lot in spine.lots} == {27.0}
+
+    def test_the_fitted_shelf_life_actually_moves_the_expiry_date(self, lifecycle):
+        declared = build_spine(lifecycle, SITES, FIRST_IN, Random(3), IdFactory())
+        fitted = build_spine(
+            lifecycle, SITES, FIRST_IN, Random(3), IdFactory(), shelf_life_months=27.0
+        )
+        assert declared.lots[0].expiry != fitted.lots[0].expiry
+
+    def test_the_check_catches_mixed_provenance(self, study, lifecycle):
+        broken = _shallow_copy(study)
+        broken.imp_lots = [
+            {**broken.imp_lots[0], "expiry_source": "STABILITY"},
+            *[{**row, "expiry_source": "DECLARED"} for row in broken.imp_lots[1:]],
+        ]
+        report = verify_spine(broken, lifecycle)
+        assert any(
+            not check.passed and "expiry provenance" in check.name
             for check in report.checks
         )

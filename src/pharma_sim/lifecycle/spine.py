@@ -68,6 +68,11 @@ class ImpLot:
     packed_on: date
     expiry: date
     stub_batch: bool
+    #: STABILITY when the expiry came from a fitted shelf life, DECLARED when it
+    #: fell back to the configured constant. A dataset that cannot tell you which
+    #: is making a claim it has not earned.
+    expiry_source: str = "DECLARED"
+    shelf_life_months: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -282,10 +287,14 @@ def build_spine(
     ids,
     *,
     manufacturing_export: str | Path | None = None,
+    shelf_life_months: float | None = None,
 ) -> Spine:
     """Pack released batches into lots, kits and shipments to sites.
 
     Args:
+        shelf_life_months: the shelf life fitted by the stability programme. Given
+            one, lot expiry is derived from it; without one the configured
+            constant is used and every lot is labelled as such.
         sites: ``(site_id, needed_by)`` pairs. A site's opening date matters: its
             first shipment can only contain lots that had been packed by then.
             Ignoring that produced kits dispensed weeks before they were made.
@@ -311,6 +320,7 @@ def build_spine(
         if kits <= 0:
             continue
         packed = batch.released_on + timedelta(days=int(rng.uniform(5, 21)))
+        months = shelf_life_months if shelf_life_months is not None else imp.lot_expiry_months
         spine.lots.append(
             ImpLot(
                 lot_id=ids.next("LOT", width=4),
@@ -319,11 +329,14 @@ def build_spine(
                 role=role_by_product.get(batch.product_id, "UNKNOWN"),
                 kits=kits,
                 packed_on=packed,
-                # Expiry is a fixed shelf life for now. Once ICH stability exists
-                # this must come from the shelf-life regression instead, which is
-                # the third spine link and is not built.
-                expiry=packed + timedelta(days=int(imp.lot_expiry_months * 30.44)),
+                # Expiry is the fitted shelf life where one was supplied. Dating
+                # a clinical lot from a constant means the expiry on the label
+                # rests on nothing; dating it from the stability regression means
+                # it rests on measured degradation of this product.
+                expiry=packed + timedelta(days=int(months * 30.44)),
                 stub_batch=batch.stub,
+                expiry_source="STABILITY" if shelf_life_months is not None else "DECLARED",
+                shelf_life_months=float(months),
             )
         )
 

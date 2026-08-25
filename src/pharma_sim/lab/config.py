@@ -35,6 +35,9 @@ __all__ = [
     "ColumnUnit",
     "SuitabilityCriterion",
     "Validation",
+    "StabilityConfig",
+    "StabilityProtocol",
+    "StorageCondition",
     "LAB_CONFIG_FILES",
 ]
 
@@ -492,6 +495,87 @@ class ValidationsConfig(Strict):
 # --------------------------------------------------------------------------- #
 
 
+# --------------------------------------------------------------------------- #
+# stability.yaml
+# --------------------------------------------------------------------------- #
+
+
+class StorageCondition(Strict):
+    condition_id: Ident
+    label: str
+    temperature_c: float
+    humidity_pct: Positive
+    timepoints_months: list[float]
+
+
+class Kinetics(Strict):
+    substance: Ident
+    activation_energy_kj_mol: Positive
+    reference_temperature_c: float
+    reference_humidity_pct: Positive
+    humidity_exponent: float
+    reference_rate_percent_per_month: NonNegative
+    degradant_split: dict[Ident, Fraction]
+    release_levels_percent: dict[Ident, NonNegative]
+
+
+class SecondaryAttribute(Strict):
+    release_value: float
+    change_per_month_at_reference: float
+    lower_limit: float | None = None
+    upper_limit: float | None = None
+
+
+class Limit(Strict):
+    lower: float | None = None
+    upper: float | None = None
+
+
+class Specification(Strict):
+    assay: Limit
+    total_impurities: Limit
+    individual_impurity: Limit
+
+
+class ShelfLifeRules(Strict):
+    fit_condition: Ident
+    confidence: Fraction
+    maximum_months: Positive
+    round_down_to_months: Positive
+    investigate_out_of_specification: bool = True
+
+
+class SignificantChange(Strict):
+    assay_change_percent: NonNegative
+    any_specification_exceeded: bool = True
+
+
+class StabilityProtocol(Strict):
+    protocol_id: Ident
+    product_id: Ident
+    method_id: Ident
+    title: str
+    batches: int
+    package: str
+    orientations: list[str]
+    replicates_per_pull: int
+    analysts: list[Ident]
+    instruments: list[Ident]
+
+
+class StabilityConfig(Strict):
+    conditions: list[StorageCondition]
+    kinetics: Kinetics
+    secondary_attributes: dict[str, SecondaryAttribute]
+    specification: Specification
+    shelf_life: ShelfLifeRules
+    significant_change: SignificantChange
+    protocols: list[StabilityProtocol]
+
+    def condition(self, condition_id: str) -> StorageCondition | None:
+        return next((c for c in self.conditions if c.condition_id == condition_id), None)
+
+
 class LabConfig(Strict):
     """Every laboratory configuration file, validated and bundled."""
 
@@ -500,6 +584,7 @@ class LabConfig(Strict):
     instruments: InstrumentsConfig
     cds: CdsConfig
     validations: ValidationsConfig
+    stability: StabilityConfig
 
 
 #: Maps each file stem under ``config/lab/`` to the field it populates.
@@ -509,4 +594,5 @@ LAB_CONFIG_FILES: dict[str, str] = {
     "instruments": "instruments",
     "cds": "cds",
     "validation": "validations",
+    "stability": "stability",
 }

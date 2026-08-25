@@ -173,6 +173,55 @@ def _lint(config: LabConfig, collector: IssueCollector) -> None:
                 collector.add("cds.yaml", f"resolution_solution.{method_id}",
                               f"{analyte_id} is not an analyte of {method_id}", "")
 
+    stability = config.stability
+    condition_ids = {c.condition_id for c in stability.conditions}
+    if stability.shelf_life.fit_condition not in condition_ids:
+        collector.add("stability.yaml", "shelf_life.fit_condition",
+                      f"unknown condition {stability.shelf_life.fit_condition}",
+                      f"declared: {', '.join(sorted(condition_ids))}")
+    if stability.kinetics.substance not in substances:
+        collector.add("stability.yaml", "kinetics.substance",
+                      f"unknown substance {stability.kinetics.substance}", "")
+    split_total = sum(stability.kinetics.degradant_split.values())
+    if abs(split_total - 1.0) > 1e-6:
+        collector.add("stability.yaml", "kinetics.degradant_split",
+                      f"proportions sum to {split_total:.4f}, not 1",
+                      "the degraded active has to go somewhere, and only there")
+    for analyte_id in {**stability.kinetics.degradant_split,
+                       **stability.kinetics.release_levels_percent}:
+        if analyte_id not in substances:
+            collector.add("stability.yaml", "kinetics",
+                          f"unknown substance {analyte_id}", "")
+    for analyte_id in stability.kinetics.degradant_split:
+        if analyte_id not in stability.kinetics.release_levels_percent:
+            collector.add("stability.yaml", "kinetics.release_levels_percent",
+                          f"{analyte_id} degrades but has no level at release", "")
+    for protocol in stability.protocols:
+        if protocol.method_id not in methods:
+            collector.add("stability.yaml", f"protocols.{protocol.protocol_id}.method_id",
+                          f"unknown method {protocol.method_id}", "")
+            continue
+        method = config.methods.by_id(protocol.method_id)
+        assert method is not None
+        declared = {a.analyte_id for a in method.analytes}
+        # The method has to be able to see every degradant the kinetics produce,
+        # or the trend is measuring something the specification does not cover.
+        for analyte_id in stability.kinetics.release_levels_percent:
+            if analyte_id not in declared:
+                collector.add(
+                    "stability.yaml", "kinetics.release_levels_percent",
+                    f"{analyte_id} is not an analyte of {protocol.method_id}",
+                    "the stability method must resolve every impurity it reports",
+                )
+        for analyst_id in protocol.analysts:
+            if analyst_id not in analysts:
+                collector.add("stability.yaml", f"protocols.{protocol.protocol_id}.analysts",
+                              f"unknown analyst {analyst_id}", "")
+        for instrument_id in protocol.instruments:
+            if instrument_id not in instruments:
+                collector.add("stability.yaml", f"protocols.{protocol.protocol_id}.instruments",
+                              f"unknown instrument {instrument_id}", "")
+
     for validation in config.validations.validations:
         if validation.method_id not in methods:
             collector.add("validation.yaml", f"{validation.validation_id}.method_id",

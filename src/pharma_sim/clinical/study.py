@@ -217,6 +217,7 @@ def run_study(
     seed: int = 42,
     *,
     manufacturing_export: str | None = None,
+    shelf_life_months: float | None = None,
 ) -> StudyOutput:
     """Run the whole study and return it in SDTM, ADaM and operational shape.
 
@@ -262,6 +263,7 @@ def run_study(
         rngs.child("lifecycle", "spine"),
         ids,
         manufacturing_export=manufacturing_export,
+        shelf_life_months=shelf_life_months,
     )
     out.spine_linked = spine.linked
 
@@ -451,6 +453,8 @@ def _emit_spine(out: StudyOutput, spine: Spine) -> None:
                 "packed_on": lot.packed_on.isoformat(),
                 "expiry": lot.expiry.isoformat(),
                 "batch_source": "STUB" if lot.stub_batch else "MANUFACTURING",
+                "expiry_source": lot.expiry_source,
+                "shelf_life_months": lot.shelf_life_months,
             }
         )
     for shipment in spine.shipments:

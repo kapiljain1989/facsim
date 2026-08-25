@@ -218,7 +218,24 @@ def verify_spine(study, lifecycle: LifecycleConfig) -> SpineReport:
         )
     )
 
-    # 9. Identifiers are unique. A reissued shipment id attributes kits to the
+    # 9. Expiry provenance is consistent. A lot dated from a fitted shelf life
+    #    and one dated from a constant are different claims, and a dataset that
+    #    mixes them without saying so is asserting the stronger one for both.
+    sources = {row.get("expiry_source") for row in study.imp_lots}
+    failures = (
+        (f"lots carry mixed expiry provenance: {sorted(s for s in sources if s)}",)
+        if len(sources) > 1
+        else ()
+    )
+    report.checks.append(
+        SpineCheck(
+            "expiry provenance consistent",
+            "every lot's expiry comes from the same kind of source",
+            not failures, len(study.imp_lots), failures,
+        )
+    )
+
+    # 10. Identifiers are unique. A reissued shipment id attributes kits to the
     #    wrong shipment and gives them the wrong arrival date, which then makes
     #    every date-based check meaningless rather than failing loudly.
     for label, rows, key in (
@@ -240,7 +257,7 @@ def verify_spine(study, lifecycle: LifecycleConfig) -> SpineReport:
             )
         )
 
-    # 10. Kit numbers must carry no information about treatment. If sorting the
+    # 11. Kit numbers must carry no information about treatment. If sorting the
     #    kit list by number segregated the arms, anybody holding it could
     #    reconstruct the allocation.
     ordered = sorted(kits.values(), key=lambda row: row["kit_number"])

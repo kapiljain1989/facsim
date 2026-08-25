@@ -215,6 +215,36 @@ def _median(values: list[float]) -> float:
     return (ordered[middle - 1] + ordered[middle]) / 2.0
 
 
+def _fitted_shelf_life(export: str | None, lifecycle) -> float | None:
+    """The shelf life the stability programme fitted, if a laboratory export
+    was supplied.
+
+    Returns None when it was not, so the spine falls back to the configured
+    constant and labels every lot accordingly. Silently substituting the constant
+    would make a fitted expiry and a declared one indistinguishable, which is the
+    difference between an expiry that rests on measured degradation and one that
+    rests on nothing.
+    """
+    if not export:
+        return None
+    path = Path(export) / "stability_shelf_life.csv"
+    if not path.exists():
+        print(f"no stability shelf life in {export}; using the configured constant",
+              file=sys.stderr)
+        return None
+    wanted = lifecycle.imp.shelf_life_protocol
+    with path.open(newline="", encoding="utf-8") as handle:
+        rows = [
+            row for row in csv.DictReader(handle)
+            if (wanted is None or row["protocol_id"] == wanted)
+            and row["limiting"].strip().lower() in {"true", "1", "yes"}
+        ]
+    if not rows:
+        print(f"no limiting attribute for {wanted} in {path}", file=sys.stderr)
+        return None
+    return float(rows[0]["shelf_life_months"])
+
+
 def _write_csv(path: Path, rows: Iterable[dict[str, Any]]) -> int:
     rows = list(rows)
     if not rows:
@@ -299,6 +329,11 @@ def main() -> int:
         help="lifecycle links directory",
     )
     parser.add_argument(
+        "--lab-export",
+        help="a laboratory export. Given one, lot expiry comes from the shelf life "
+             "the stability programme fitted rather than from the configured constant",
+    )
+    parser.add_argument(
         "--manufacturing-export",
         help="a plant export directory. Given one, every kit traces to a batch the "
              "plant actually released; without one the spine uses labelled stubs",
@@ -309,11 +344,15 @@ def main() -> int:
     config = load_clinical_config(args.config)
     lifecycle = load_lifecycle_config(args.lifecycle)
     print(f"running {config.protocol.study_id}")
+    shelf_life = _fitted_shelf_life(args.lab_export, lifecycle)
+    if shelf_life is not None:
+        print(f"lot expiry from the fitted shelf life: {shelf_life:g} months")
     out = run_study(
         config,
         lifecycle,
         seed=args.seed,
         manufacturing_export=args.manufacturing_export,
+        shelf_life_months=shelf_life,
     )
     print(out.summary())
 
