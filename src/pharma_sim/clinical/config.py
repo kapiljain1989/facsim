@@ -129,6 +129,8 @@ class GrowthArm(Strict):
 
 class GrowthConfig(Strict):
     arms: dict[str, GrowthArm]
+    #: Additional resistant-fraction growth when off treatment, as a fraction.
+    growth_suppression: NonNegative = 0.0
 
 
 class HazardConfig(Strict):

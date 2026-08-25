@@ -260,6 +260,23 @@ three times higher on the active arm. A profile where every event is worse on on
 arm has been scaled rather than modelled, and there is a test asserting the
 backbone events match within 10 percentage points.
 
+**Dose received changes the disease.** The treatment effect acts on
+*dose-weighted* time rather than calendar time, so a subject at half dose for
+twenty weeks has had the same exposure as one at full dose for ten. Reduce the
+dose and the shrinkage slows; stop it and the disease resumes its untreated
+course. In the shipped dataset the lowest exposure quartile reaches a median PFS
+of about 4.8 months against 9.5 in the highest.
+
+Getting that right needed two effects, and the first model had only one. With
+shrinkage alone, a reduced dose gives a shallower nadir — and because RECIST
+judges progression as a relative rise *from the nadir*, a shallower nadir takes
+longer to progress from. Less drug produced **better** progression-free survival,
+which is backwards and looks entirely reasonable in the code. The missing physics
+is that treatment also holds the resistant fraction back, so time off it
+accelerates growth as well as slowing kill. `growth_suppression` in
+`tumour.yaml` carries that, and a test asserts the relationship *inverts* when it
+is set to zero — so the parameter cannot quietly stop mattering.
+
 **Grade 5 is never drawn.** A fatal event belongs to the survival model, which
 ties death to disease burden. Letting an adverse-event table kill subjects would
 double count mortality and break that relationship — so the loader rejects a
@@ -376,12 +393,16 @@ Specific about what is not there:
   rates, manual review, coder queries and a coding dictionary version upgrade.
   Events are emitted already coded. WHODrug and concomitant medications do not
   exist at all.
-- **Adverse events do not affect the disease.** Toxicity shortens exposure, and
-  reduced exposure ought to shorten response — but the lesion model is drawn
-  independently of the dose received, so a subject who spent half the study
-  interrupted responds as well as one who took every tablet. Closing that would
-  make relative dose intensity a predictor of PFS, which is the relationship a
-  pharmacometrician would look for first.
+- **The exposure–response relationship is confounded, as it is in real life.**
+  Dose received now changes the trajectory, and relative dose intensity predicts
+  PFS — but part of that association runs through discontinuation: toxicity stops
+  the drug, stopping the drug removes the treatment effect, and the subject
+  progresses. That is a real causal path rather than an artefact, but it means
+  the correlation is not a clean dose–effect curve and should not be read as one.
+  Published exposure–response analyses in oncology have exactly this problem.
+- **Pharmacokinetics are not modelled.** Exposure is dose received, not plasma
+  concentration. There is no absorption, no clearance, no covariates and no
+  `PC`/`PP` domain, so nothing supports a population PK analysis.
 - **No safety database.** SAE reconciliation appears as a reconciliation row
   against an implied external system rather than a modelled one.
 - **The imaging vendor is not an entity.** Central review happens, but the

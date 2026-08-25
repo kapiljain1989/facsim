@@ -337,6 +337,23 @@ def run_study(
             }
         )
 
+        # ---------------------------------------------------------- safety
+        # Generated BEFORE the assessments, because the dose a subject actually
+        # received changes their tumour trajectory and therefore when they
+        # progress. The window is the whole available follow-up rather than the
+        # time to progression -- which is not known yet -- and the exposure is
+        # truncated to the cycles actually reached once it is.
+        events = generate_events(
+            subject_id, arm_id, available, config,
+            rngs.child("clin", "safety", subject_id), ids,
+        )
+        planned_cycles = max(1, int(available // cycle_weeks) + 1)
+        exposure = apply_dose_modifications(
+            subject_id, events, planned_cycles, cycle_weeks, config.dose_modification
+        )
+        starting_dose = config.dose_modification.starting_dose_mg
+        tumour.dose_history = exposure.dose_history(starting_dose, cycle_weeks)
+
         primary_course: list[Assessment] = []
         primary_outcome = None
         assessment_facts: dict[int, dict[str, object]] = {}
@@ -409,17 +426,14 @@ def run_study(
 
         assert primary_outcome is not None
 
-        # ---------------------------------------------------------- safety
-        # Time on treatment, before toxicity is allowed to shorten it.
+        # Now that progression is known, keep only what the subject reached.
         on_treatment = min(primary_outcome.week, available)
-        events = generate_events(
-            subject_id, arm_id, on_treatment, config,
-            rngs.child("clin", "safety", subject_id), ids,
-        )
-        planned_cycles = max(1, int(on_treatment // cycle_weeks) + 1)
-        exposure = apply_dose_modifications(
-            subject_id, events, planned_cycles, cycle_weeks, config.dose_modification
-        )
+        if exposure.discontinued_week is not None:
+            on_treatment = min(on_treatment, exposure.discontinued_week)
+        reached = max(1, int(on_treatment // cycle_weeks) + 1)
+        exposure.truncate(reached)
+        events = [event for event in events if event.onset_week <= on_treatment]
+
         _emit_safety(
             out, protocol.study_id, subject_id, arm, events, exposure,
             randomised, cycle_weeks, config,

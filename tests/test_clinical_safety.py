@@ -352,3 +352,83 @@ class TestInTheEmittedStudy:
         for row in study.exposure:
             by_arm[row["arm"]].append(row["relative_dose_intensity"])
         assert stats.fmean(by_arm["ARM-A"]) < stats.fmean(by_arm["ARM-B"])
+
+
+class TestExposurePredictsOutcome:
+    """The relationship a pharmacometrician looks for first.
+
+    Before the exposure-response coupling, the lesion trajectory was drawn
+    independently of the dose received, so a subject who spent half the study
+    interrupted responded exactly as well as one who took every tablet and
+    relative dose intensity predicted nothing.
+    """
+
+    @pytest.fixture(scope="class")
+    @staticmethod
+    def outcomes(config):
+        """PFS events paired with the exposure that produced them, over several
+        seeds so the quartiles have something in them."""
+        lifecycle = load_lifecycle_config(LIFECYCLE)
+        paired: list[tuple[str, float, float]] = []
+        for seed in (1, 2, 3):
+            study = run_study(config, lifecycle, seed=seed)
+            intensity = {
+                row["subject_id"]: row["relative_dose_intensity"]
+                for row in study.exposure
+            }
+            arms = {row["USUBJID"]: row["ARM"] for row in study.subjects}
+            for row in study.adtte:
+                if row["PARAMCD"] != "PFS" or row["EVAL"] != "BICR":
+                    continue
+                if row["CNSR"] != 0:  # events only; censored times are not outcomes
+                    continue
+                paired.append((arms[row["USUBJID"]], intensity[row["USUBJID"]], row["AVAL"]))
+        return paired
+
+    def test_there_is_a_spread_of_exposure_to_correlate_against(self, outcomes):
+        values = [intensity for _, intensity, _ in outcomes]
+        assert min(values) < 0.8 < max(values)
+
+    @pytest.mark.parametrize("arm", ["ARM-A", "ARM-B"])
+    def test_lower_exposure_gives_shorter_progression_free_survival(self, outcomes, arm):
+        rows = sorted((i, a) for armed, i, a in outcomes if armed == arm)
+        assert len(rows) >= 40, f"only {len(rows)} events in {arm}"
+        quartile = len(rows) // 4
+        low = [aval for _, aval in rows[:quartile]]
+        high = [aval for _, aval in rows[-quartile:]]
+        assert stats.median(low) < stats.median(high), (
+            "the lowest exposure quartile should progress sooner than the highest"
+        )
+
+    @pytest.mark.parametrize("arm", ["ARM-A", "ARM-B"])
+    def test_the_rank_correlation_is_positive(self, outcomes, arm):
+        rows = [(i, a) for armed, i, a in outcomes if armed == arm]
+        assert len(rows) >= 40
+        count = len(rows)
+        by_intensity = sorted(range(count), key=lambda index: rows[index][0])
+        by_survival = sorted(range(count), key=lambda index: rows[index][1])
+        rank_i = {value: position for position, value in enumerate(by_intensity)}
+        rank_s = {value: position for position, value in enumerate(by_survival)}
+        squared = sum((rank_i[index] - rank_s[index]) ** 2 for index in range(count))
+        rho = 1.0 - 6.0 * squared / (count * (count * count - 1))
+        assert rho > 0.1, f"rank correlation {rho:+.3f} is too weak to be a relationship"
+
+    def test_stopping_for_toxicity_shortens_survival(self, config):
+        """A subject taken off treatment for toxicity loses the treatment effect,
+        so their disease progresses on the untreated trajectory."""
+        lifecycle = load_lifecycle_config(LIFECYCLE)
+        study = run_study(config, lifecycle, seed=5)
+        stopped = {
+            row["subject_id"] for row in study.exposure
+            if row["discontinued_for_toxicity"] == "Y"
+        }
+        assert stopped, "no subject stopped for toxicity at this seed"
+        intensity = {
+            row["subject_id"]: row["relative_dose_intensity"] for row in study.exposure
+        }
+        # Their exposure must be materially below the rest.
+        others = [
+            value for subject, value in intensity.items() if subject not in stopped
+        ]
+        theirs = [intensity[subject] for subject in stopped]
+        assert stats.fmean(theirs) < stats.fmean(others)

@@ -30,6 +30,7 @@ from pharma_sim.clinical.recist import LesionMeasurement, RecistRules, Timepoint
 
 __all__ = [
     "Lesion",
+    "DoseHistory",
     "GrowthParameters",
     "ReaderSelection",
     "SubjectTumour",
@@ -73,20 +74,73 @@ class Lesion:
 
 
 @dataclass(frozen=True, slots=True)
+class DoseHistory:
+    """What fraction of the planned dose a subject was actually taking, over time.
+
+    Segments are ``(start_week, end_week, fraction)``, where the fraction is the
+    delivered dose over the planned dose — 1.0 at full dose, 0.5 at half a dose
+    level, 0.0 while interrupted or after treatment stopped.
+    """
+
+    segments: tuple[tuple[float, float, float], ...] = ()
+
+    def effective_weeks(self, weeks: float) -> float:
+        """Dose-weighted time on treatment up to ``weeks``.
+
+        This is the integral of the dose fraction, and it is what the treatment
+        effect acts on. A subject at full dose for ten weeks and one at half dose
+        for twenty have had the same exposure and should have had the same
+        benefit — which is the relationship the whole idea rests on.
+        """
+        if not self.segments:
+            # No history means no modelled interruption, so treatment is assumed
+            # continuous at full dose. That keeps a tumour usable on its own.
+            return max(0.0, weeks)
+        total = 0.0
+        for start, end, fraction in self.segments:
+            if weeks <= start:
+                break
+            total += (min(weeks, end) - start) * fraction
+        return max(0.0, total)
+
+
+@dataclass(frozen=True, slots=True)
 class GrowthParameters:
     sensitive_fraction: float
     shrinkage_rate_per_week: float
     growth_rate_per_week: float
+    #: How much faster the resistant fraction grows off treatment.
+    growth_suppression: float = 0.0
 
-    def scale_at(self, weeks: float) -> float:
-        """Multiplier on baseline size at ``weeks``, never negative."""
+    def scale_at(self, weeks: float, dose: DoseHistory | None = None) -> float:
+        """Multiplier on baseline size at ``weeks``, never negative.
+
+        The sensitive fraction shrinks with *dose-weighted* time and the
+        resistant fraction grows with calendar time, because the disease does not
+        pause while a subject is off treatment. That asymmetry is the whole
+        exposure-response relationship: interrupt or reduce the dose and the
+        shrinkage slows while the growth does not, so the tumour turns around
+        sooner and progression arrives earlier.
+
+        Without it, a subject who spent half the study dose-interrupted responded
+        exactly as well as one who took every tablet, and relative dose intensity
+        predicted nothing.
+        """
         if weeks <= 0.0:
             return 1.0
+        treated = weeks if dose is None else dose.effective_weeks(weeks)
+        untreated = max(0.0, weeks - treated)
+
         sensitive = self.sensitive_fraction * math.exp(
-            -self.shrinkage_rate_per_week * weeks
+            -self.shrinkage_rate_per_week * treated
         )
+        # Treatment also holds the resistant fraction back, so time off it
+        # accelerates growth as well as slowing kill. Both effects are needed:
+        # with only the shrinkage term, a reduced dose gives a shallower nadir,
+        # and a shallower nadir takes longer to rise 20% above -- so less drug
+        # produced *better* progression-free survival, which is backwards.
         resistant = (1.0 - self.sensitive_fraction) * math.exp(
-            self.growth_rate_per_week * weeks
+            self.growth_rate_per_week * (weeks + self.growth_suppression * untreated)
         )
         return max(sensitive + resistant, 0.0)
 
@@ -127,11 +181,14 @@ class SubjectTumour:
     non_target_progression_week: float | None = None
     #: Week of death, if it occurs within the horizon.
     death_week: float | None = None
+    #: What the subject was actually taking, over time. Set once the safety and
+    #: exposure model has run; absent means continuous full dose.
+    dose_history: DoseHistory | None = None
 
     def true_diameter_mm(self, lesion: Lesion, weeks: float) -> float:
         """True size of one lesion, before anybody measures it."""
         elapsed = max(0.0, weeks - lesion.appeared_week)
-        return lesion.baseline_mm * self.growth.scale_at(elapsed)
+        return lesion.baseline_mm * self.growth.scale_at(elapsed, self.dose_history)
 
     def true_total_sum_mm(self, weeks: float) -> float:
         """True burden across every measurable lesion, whoever selected what.
@@ -231,6 +288,7 @@ def build_tumour(
             rng.gauss(arm_growth.growth_rate_per_week.mean, arm_growth.growth_rate_per_week.sd),
             0.0,
         ),
+        growth_suppression=config.growth.growth_suppression,
     )
 
     tumour = SubjectTumour(subject_id=subject_id, arm=arm, growth=growth)

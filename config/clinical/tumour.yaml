@@ -92,6 +92,17 @@ baseline:
 # shrink-then-regrow curve that acquired resistance actually looks like. Response
 # rate and PFS are consequences of these three parameters, not separate settings.
 growth:
+  # How much faster the resistant fraction grows when the subject is off
+  # treatment or on a reduced dose. Without this, dose reduction only slows the
+  # shrinkage -- and because RECIST judges progression as a relative rise from
+  # the nadir, a shallower nadir then takes LONGER to progress from. The
+  # relationship comes out backwards: less drug appears to give better
+  # progression-free survival.
+  #
+  # A drug rarely has no effect at all on the resistant fraction, so reducing the
+  # dose increases net growth as well as reducing kill. At 0.6, a subject fully
+  # off treatment has a resistant clone growing 60% faster than one at full dose.
+  growth_suppression: 0.6
   arms:
     ARM-A:
       sensitive_fraction: {mean: 0.72, sd: 0.22}

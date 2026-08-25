@@ -240,3 +240,112 @@ class TestAssessmentSchedule:
             if flag
         )
         assert missed > 0
+
+
+class TestExposureResponse:
+    """Dose received has to change the disease, or exposure means nothing.
+
+    Two effects are needed and neither is sufficient alone. Reducing the dose
+    slows the shrinkage, and it also lets the resistant fraction grow faster.
+    With only the first, a lower dose gives a shallower nadir — and because RECIST
+    judges progression as a relative rise from the nadir, a shallower nadir takes
+    *longer* to progress from. The relationship comes out backwards: less drug
+    appears to improve progression-free survival.
+    """
+
+    @staticmethod
+    def _growth(suppression: float):
+        from pharma_sim.clinical.lesion import GrowthParameters
+
+        return GrowthParameters(0.72, 0.055, 0.018, growth_suppression=suppression)
+
+    @staticmethod
+    def _progression_week(growth, dose, horizon=300.0):
+        """First week the sum rises 20% above its running nadir."""
+        nadir = 1.0
+        step = 0.5
+        week = step
+        while week <= horizon:
+            value = growth.scale_at(week, dose)
+            nadir = min(nadir, value)
+            if value >= nadir * 1.20:
+                return week
+            week += step
+        return None
+
+    def test_dose_weighted_time_is_what_the_treatment_acts_on(self):
+        from pharma_sim.clinical.lesion import DoseHistory
+
+        full = DoseHistory(((0.0, 20.0, 1.0),))
+        half = DoseHistory(((0.0, 40.0, 0.5),))
+        assert full.effective_weeks(20.0) == pytest.approx(20.0)
+        assert half.effective_weeks(40.0) == pytest.approx(20.0)
+
+    def test_an_absent_history_means_continuous_full_dose(self):
+        from pharma_sim.clinical.lesion import DoseHistory
+
+        assert DoseHistory().effective_weeks(30.0) == pytest.approx(30.0)
+
+    def test_a_lower_dose_gives_a_shallower_nadir(self):
+        from pharma_sim.clinical.lesion import DoseHistory
+
+        growth = self._growth(0.6)
+        full = DoseHistory(((0.0, 300.0, 1.0),))
+        half = DoseHistory(((0.0, 300.0, 0.5),))
+        deepest = lambda dose: min(
+            growth.scale_at(week * 0.5, dose) for week in range(1, 200)
+        )
+        assert deepest(half) > deepest(full)
+
+    def test_a_lower_dose_progresses_sooner(self):
+        """The property the whole coupling exists for."""
+        from pharma_sim.clinical.lesion import DoseHistory
+
+        growth = self._growth(0.6)
+        weeks = [
+            self._progression_week(growth, DoseHistory(((0.0, 300.0, fraction),)))
+            for fraction in (1.0, 0.75, 0.5)
+        ]
+        assert all(week is not None for week in weeks)
+        assert weeks == sorted(weeks, reverse=True), weeks
+
+    def test_without_growth_suppression_the_relationship_inverts(self):
+        """The control that shows the second effect is load-bearing.
+
+        This is the model that was written first, and it is wrong in a way that
+        looks reasonable: with only the shrinkage term, a reduced dose delays
+        progression instead of hastening it.
+        """
+        from pharma_sim.clinical.lesion import DoseHistory
+
+        growth = self._growth(0.0)
+        full = self._progression_week(growth, DoseHistory(((0.0, 300.0, 1.0),)))
+        half = self._progression_week(growth, DoseHistory(((0.0, 300.0, 0.5),)))
+        assert full is not None and half is not None
+        assert half > full, (
+            "if this no longer inverts, growth_suppression is no longer the thing "
+            "carrying the exposure-response relationship"
+        )
+
+    def test_stopping_treatment_brings_progression_forward_sharply(self):
+        from pharma_sim.clinical.lesion import DoseHistory
+
+        growth = self._growth(0.6)
+        throughout = self._progression_week(growth, DoseHistory(((0.0, 300.0, 1.0),)))
+        stopped = self._progression_week(
+            growth, DoseHistory(((0.0, 20.0, 1.0), (20.0, 300.0, 0.0)))
+        )
+        assert stopped < throughout
+
+    def test_an_interruption_costs_less_than_a_permanent_reduction(self):
+        """A twelve-week gap and a permanent halving deliver similar total dose,
+        but the gap is recovered from and the halving is not."""
+        from pharma_sim.clinical.lesion import DoseHistory
+
+        growth = self._growth(0.6)
+        gap = self._progression_week(
+            growth,
+            DoseHistory(((0.0, 12.0, 1.0), (12.0, 24.0, 0.0), (24.0, 300.0, 1.0))),
+        )
+        halved = self._progression_week(growth, DoseHistory(((0.0, 300.0, 0.5),)))
+        assert gap > halved

@@ -103,6 +103,43 @@ class Exposure:
     discontinued_week: float | None = None
     discontinuation_reason: str | None = None
 
+    def truncate(self, last_cycle: int) -> None:
+        """Keep only the cycles the subject actually reached.
+
+        Exposure is worked out over the whole follow-up window, because the dose
+        history has to exist before the trajectory that decides when progression
+        happens. Once it is known, everything after it is discarded -- otherwise
+        relative dose intensity would be diluted by cycles nobody received.
+        """
+        self.dose_by_cycle = {
+            cycle: dose for cycle, dose in self.dose_by_cycle.items() if cycle <= last_cycle
+        }
+        self.days_by_cycle = {
+            cycle: days for cycle, days in self.days_by_cycle.items() if cycle <= last_cycle
+        }
+        self.modifications = [
+            modification for modification in self.modifications
+            if modification.cycle <= last_cycle
+        ]
+
+    def dose_history(self, starting_dose: float, cycle_weeks: float):
+        """The dose fraction over time, for the exposure-response model."""
+        from pharma_sim.clinical.lesion import DoseHistory
+
+        segments: list[tuple[float, float, float]] = []
+        cycle_days = cycle_weeks * 7.0
+        for cycle in sorted(self.dose_by_cycle):
+            start = (cycle - 1) * cycle_weeks
+            dosed = self.days_by_cycle.get(cycle, cycle_days)
+            level = self.dose_by_cycle[cycle] / starting_dose if starting_dose else 0.0
+            fraction = level * (dosed / cycle_days if cycle_days else 0.0)
+            segments.append((start, start + cycle_weeks, fraction))
+        if segments:
+            # After the last cycle the subject is taking nothing, and the disease
+            # is no longer being held back.
+            segments.append((segments[-1][1], 1.0e6, 0.0))
+        return DoseHistory(tuple(segments))
+
     def relative_dose_intensity(self, starting_dose: float, cycle_days: float) -> float:
         """Delivered dose over planned dose across the cycles received.
 
