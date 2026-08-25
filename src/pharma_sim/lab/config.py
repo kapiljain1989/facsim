@@ -38,6 +38,11 @@ __all__ = [
     "StabilityConfig",
     "StabilityProtocol",
     "StorageCondition",
+    "FormulationsConfig",
+    "Prototype",
+    "DoeConfig",
+    "Factor",
+    "ResponseSpec",
     "LAB_CONFIG_FILES",
 ]
 
@@ -576,6 +581,138 @@ class StabilityConfig(Strict):
         return next((c for c in self.conditions if c.condition_id == condition_id), None)
 
 
+# --------------------------------------------------------------------------- #
+# formulations.yaml and doe.yaml
+# --------------------------------------------------------------------------- #
+
+
+class PreformulationStudy(Strict):
+    study: str
+    technique: str
+    outcome_from: str | None = None
+
+
+class Compatibility(Strict):
+    excipient_id: Ident
+    outcome: str
+    degradation_percent_4wk: NonNegative
+
+
+class Preformulation(Strict):
+    substance: Ident
+    studies: list[PreformulationStudy]
+    compatibility: list[Compatibility]
+
+
+class Prototype(Strict):
+    formulation_id: Ident
+    name: str
+    route: str
+    role: str
+    description: str
+    composition_percent: dict[Ident, Positive]
+    api_form: str | None = None
+    api_d50_um: Positive | None = None
+    matches: Ident | None = None
+
+
+class Range(Strict):
+    target: float | None = None
+    minimum: float | None = None
+    maximum: float | None = None
+
+
+class TargetProduct(Strict):
+    product_id: Ident
+    strength_mg: Positive
+    tablet_weight_mg: Positive
+    specification: dict[str, Range]
+
+
+class FormulationsConfig(Strict):
+    preformulation: Preformulation
+    prototypes: list[Prototype]
+    target_product: TargetProduct
+
+    def prototype(self, formulation_id: str) -> Prototype | None:
+        return next(
+            (p for p in self.prototypes if p.formulation_id == formulation_id), None
+        )
+
+
+class DesignSpec(Strict):
+    type: str
+    factors: int
+    fraction: int
+    resolution: str
+    generator: dict[str, list[str]]
+    centre_points: int
+    replicates: int = 1
+
+
+class Factor(Strict):
+    factor: str
+    name: Ident
+    unit: str
+    low: float
+    high: float
+    centre: float
+
+
+class ResponseTerm(Strict):
+    factor: Ident
+    coef: float
+
+
+class TrueResponse(Strict):
+    intercept: float
+    terms: list[ResponseTerm]
+    #: Coefficient on ``(factor - centre) ** 2``, per factor. A two-level design
+    #: cannot fit these; they exist so the centre points can detect them.
+    quadratic: dict[Ident, float] = Field(default_factory=dict)
+
+
+class ResponseSpec(Strict):
+    response: Ident
+    unit: str
+    #: TARGET, MINIMISE or MAXIMISE.
+    direction: str
+    noise_sigma: NonNegative
+    true_response: TrueResponse
+    form_effect: dict[str, float] = Field(default_factory=dict)
+    target: float | None = None
+    minimum: float | None = None
+    maximum: float | None = None
+
+
+class Optimisation(Strict):
+    method: str
+    weights: dict[Ident, Positive]
+    grid_points: int
+    setpoint_tolerance: dict[Ident, Positive]
+    curvature_threshold: Positive = 2.0
+
+
+class DoeStudy(Strict):
+    study_id: Ident
+    title: str
+    prototypes: list[Ident]
+    started: date
+    analyst: Ident
+    method_id: Ident
+
+
+class DoeConfig(Strict):
+    design: DesignSpec
+    factors: list[Factor]
+    responses: list[ResponseSpec]
+    optimisation: Optimisation
+    studies: list[DoeStudy]
+
+    def factor(self, name: str) -> Factor | None:
+        return next((f for f in self.factors if f.name == name), None)
+
+
 class LabConfig(Strict):
     """Every laboratory configuration file, validated and bundled."""
 
@@ -585,6 +722,8 @@ class LabConfig(Strict):
     cds: CdsConfig
     validations: ValidationsConfig
     stability: StabilityConfig
+    formulations: FormulationsConfig
+    doe: DoeConfig
 
 
 #: Maps each file stem under ``config/lab/`` to the field it populates.
@@ -595,4 +734,6 @@ LAB_CONFIG_FILES: dict[str, str] = {
     "cds": "cds",
     "validation": "validations",
     "stability": "stability",
+    "formulations": "formulations",
+    "doe": "doe",
 }

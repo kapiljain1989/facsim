@@ -47,6 +47,7 @@ from the data it describes.
 - [How an injection happens](#how-an-injection-happens)
 - [Where precision comes from](#where-precision-comes-from)
 - [Reading the validation report](#reading-the-validation-report)
+- [The designed experiment, and the setpoints it chose](#the-designed-experiment-and-the-setpoints-it-chose)
 - [Stability, and a shelf life that is fitted](#stability-and-a-shelf-life-that-is-fitted)
 - [Adding a method](#adding-a-method)
 - [Limitations](#limitations)
@@ -251,6 +252,58 @@ reported, and performance is then confirmed *at* that level rather than below it
 
 ---
 
+## The designed experiment, and the setpoints it chose
+
+The plant's compression force and blend time used to be numbers in
+`products.yaml` with nothing behind them. They are now the output of a screening
+study, and `verify_realism.py` checks that manufacturing is running what
+development selected — otherwise the experiment is decoration.
+
+A fractional factorial: four factors in eight runs at resolution IV, with the
+fourth column generated as the product of the other three, plus three centre
+points. Main effects come out clear of two-factor interactions; the interactions
+are aliased with each other and `doe_curvature.csv` and the aliasing record say
+so, because a screening design that claims to resolve everything is lying.
+
+**The optimum is a compromise, and getting that right took two rounds.** Harder
+tablets are less friable and dissolve more slowly. More lubricant tablets better
+and dissolves worse. More disintegrant dissolves faster and makes a softer tablet.
+So the desirability optimum sits in the interior.
+
+The first version did not. Three of four factors optimised to a corner, because
+disintegrant only helped and lubricant only hurt — and a factor with no trade-off
+has no interior optimum, so reporting a corner as "the optimum" is misleading.
+The missing physics was ordinary formulation science: croscarmellose is a
+disintegrant rather than a binder, so more of it costs hardness; and below about
+0.5% magnesium stearate a direct-compression blend sticks to the tooling, so
+there is an ejection-force response that gives lubricant a reason to exist.
+
+**Blend time is held at its centre, and that is the honest answer.** Content
+uniformity improves with blending and then gets worse again — continued blending
+over-lubricates and a blend of unlike particle sizes segregates. A two-level
+design **cannot fit** a curved factor; the centre points can only detect the
+curvature. So the study reports curvature at four to six standard errors and
+holds blend time at 24 minutes pending a response-surface design, rather than
+extrapolating a straight-line fit to the edge of the range. That restriction was
+also a bug once: at a weaker curvature the test sat marginally at its threshold,
+so blend time was held on some seeds and extrapolated to 28 on others, and the
+setpoint it produced flipped.
+
+**The study moved the plant.** The optimum sits at 12.7 kN across seeds, and
+`products.yaml` declared 11.5. Rather than tune the response surfaces until the
+optimum matched the number already there — which would have been the wrong causal
+direction and would have made the whole exercise decorative — the plant was
+changed to 12.7 and the affected QC transfer intercept recalibrated with it. The
+convention throughout is that nominal inputs land on target, so a setpoint change
+means that intercept changes too.
+
+The direct-compression route wins on all twelve seeds tried. The spray-dried
+dispersion dissolves better and costs a spray dryer, a physical-stability risk on
+storage and a larger tablet, so it should only be selected if the simpler route
+cannot meet dissolution — and here it can.
+
+---
+
 ## Stability, and a shelf life that is fitted
 
 Nothing declares a shelf life. Degradation runs on Arrhenius kinetics, the
@@ -340,9 +393,18 @@ Honest about what this slice does not do yet:
   When release testing uses the same lifecycle they should move to their own
   module rather than be duplicated. There is no LIMS around routine release
   testing today.
-- **No formulation DoE.** Nothing yet connects a formulation to the plant's
-  process parameters, which are declared numbers with no development history
-  behind them. This is the last unbuilt piece of the laboratory domain.
+- **The screening design cannot optimise a curved factor.** It detects curvature
+  and stops, which is correct, but it means blend time is carried at its centre
+  rather than optimised. A central composite or Box-Behnken follow-up is the
+  right next study and does not exist.
+- **Interactions are aliased and stay that way.** Resolution IV keeps main
+  effects clean but leaves two-factor interactions confounded with each other. No
+  fold-over or follow-up design resolves them, so an interaction that mattered
+  would be invisible.
+- **Composition is not optimised, only the process.** Disintegrant and lubricant
+  levels are DoE factors, but the selected values do not feed back into the
+  prototype compositions in `formulations.yaml` — those stay as declared. Only
+  compression force and blend time propagate to the plant.
 - **The OOS investigation is a template.** Phase I and Phase II conclusions are
   recorded, but every investigation resolves the same way — confirmed
   product-related. A real programme has laboratory errors, invalidated assays,

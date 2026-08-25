@@ -35,8 +35,12 @@ def envelopes():
 
 
 class TestTheConfiguration:
-    def test_parses(self, envelopes):
-        assert set(envelopes) == {"manufacturing", "laboratory", "clinical", "spine"}
+    def test_every_section_can_be_computed(self, module, envelopes):
+        """Asserted against what the script knows how to compute rather than
+        against a hard-coded list -- the list version failed the moment a section
+        was added, which told nobody anything useful."""
+        assert set(envelopes) == set(module._SECTIONS)
+        assert envelopes, "no envelopes declared"
 
     def test_every_envelope_is_ordered_and_justified(self, envelopes):
         """An envelope nobody can justify is one somebody widens the first time it

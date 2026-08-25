@@ -253,3 +253,24 @@ spine:
     high: 1.0
     why: >-
       Fraction of dosing records resolving to a manufactured batch.
+
+process_development:
+  - metric: doe_setpoint_agreement
+    low: 1.0
+    high: 1.0
+    why: >-
+      Fraction of the plant's process parameters that match the optimum the
+      design of experiments selected, within the tolerance the study declares.
+      Anything below one means manufacturing is running a setting nobody chose,
+      and the development work is decoration. This is the check that the causal
+      direction runs the right way: the experiment determines the setpoint and
+      the plant follows it, not the reverse.
+
+  - metric: doe_selected_declared_formulation
+    low: 1.0
+    high: 1.0
+    why: >-
+      Boolean. The formulation the study selected must be the one the lifecycle
+      links say is being manufactured. If the screening study starts choosing the
+      spray-dried dispersion, the plant is making the wrong product and the
+      composition, the process and the placebo match all become wrong with it.

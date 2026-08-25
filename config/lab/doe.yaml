@@ -1,0 +1,175 @@
+# The designed experiment that chooses the formulation and its process settings.
+#
+# A fractional factorial rather than a full one: four factors at two levels in
+# eight runs, resolution IV, so main effects are clear of two-factor interactions
+# even though the interactions are aliased with each other. Plus three centre
+# points, which is what tells you whether the surface is curved -- a screening
+# design cannot estimate curvature, only detect it.
+#
+# The `true_response` blocks are ground truth. The engine evaluates them, adds
+# analytical and process error, and the fitted effects come out of the noisy
+# observations -- so an effect the design cannot resolve is not resolved.
+#
+# The optimum is interior rather than at a corner because the responses genuinely
+# conflict: harder tablets are less friable and dissolve more slowly, more
+# lubricant tablets better and dissolves worse, longer blending improves content
+# uniformity and over-lubricates. A design whose optimum sits at a corner has not
+# modelled a real formulation problem.
+
+design:
+  type: FRACTIONAL_FACTORIAL
+  factors: 4
+  fraction: 1        # 2^(4-1)
+  resolution: IV
+  #: D is aliased with ABC, which is what makes this resolution IV.
+  generator: {D: [A, B, C]}
+  centre_points: 3
+  replicates: 1
+
+factors:
+  - {factor: A, name: main_compression_force, unit: kN, low: 9.5, high: 13.5, centre: 11.5}
+  - {factor: B, name: blend_time, unit: min, low: 20.0, high: 28.0, centre: 24.0}
+  - {factor: C, name: disintegrant_percent, unit: '%w/w', low: 4.0, high: 8.0, centre: 6.0}
+  - {factor: D, name: lubricant_percent, unit: '%w/w', low: 0.5, high: 1.5, centre: 1.0}
+
+# Each response is a declarative polynomial in the factors' natural units, plus a
+# term for the API form so the two development routes differ where they should.
+# Intercepts are chosen so the centre point lands on the specification target,
+# which is the same convention the plant's QC transfers use.
+responses:
+  - response: tablet_hardness_n
+    unit: N
+    direction: TARGET
+    target: 95.0
+    minimum: 70.0
+    maximum: 120.0
+    noise_sigma: 2.6
+    true_response:
+      intercept: 47.30
+      terms:
+        - {factor: main_compression_force, coef: 6.200}
+        - {factor: lubricant_percent, coef: -8.000}
+        - {factor: blend_time, coef: -0.250}
+        # Croscarmellose is a disintegrant, not a binder. More of it makes a
+        # softer tablet, which is the cost that stops the optimum running to the
+        # top of its range.
+        - {factor: disintegrant_percent, coef: -1.600}
+    form_effect: {MICRONISED_CRYSTALLINE: 0.0, AMORPHOUS_DISPERSION: -6.0}
+
+  - response: friability_percent
+    unit: '%'
+    direction: MINIMISE
+    maximum: 1.0
+    noise_sigma: 0.055
+    true_response:
+      intercept: 1.570
+      terms:
+        - {factor: main_compression_force, coef: -0.160}
+        - {factor: lubricant_percent, coef: 0.450}
+        - {factor: disintegrant_percent, coef: 0.045}
+    form_effect: {MICRONISED_CRYSTALLINE: 0.0, AMORPHOUS_DISPERSION: 0.12}
+
+  - response: disintegration_time_min
+    unit: min
+    direction: MINIMISE
+    maximum: 15.0
+    noise_sigma: 0.65
+    true_response:
+      intercept: -3.750
+      terms:
+        - {factor: main_compression_force, coef: 1.100}
+        - {factor: lubricant_percent, coef: 2.200}
+        - {factor: disintegrant_percent, coef: -0.850}
+    form_effect: {MICRONISED_CRYSTALLINE: 0.0, AMORPHOUS_DISPERSION: -1.4}
+
+  # The binding constraint, and the reason the amorphous route exists at all.
+  - response: dissolution_30min_percent
+    unit: '%'
+    direction: MAXIMISE
+    minimum: 80.0
+    target: 88.0
+    noise_sigma: 1.9
+    true_response:
+      intercept: 96.975
+      terms:
+        - {factor: main_compression_force, coef: -1.050}
+        - {factor: lubricant_percent, coef: -6.500}
+        - {factor: disintegrant_percent, coef: 2.400}
+        - {factor: blend_time, coef: -0.200}
+    form_effect: {MICRONISED_CRYSTALLINE: 0.0, AMORPHOUS_DISPERSION: 9.0}
+
+  # The response that gives lubricant a purpose. Every other response prefers
+  # less of it, so without this the optimum runs to the bottom of the range and
+  # the tablet would stick to the tooling.
+  - response: ejection_force_n
+    unit: N
+    direction: MINIMISE
+    maximum: 450.0
+    noise_sigma: 14.0
+    true_response:
+      intercept: 442.0
+      terms:
+        - {factor: lubricant_percent, coef: -280.0}
+        - {factor: main_compression_force, coef: 12.0}
+    form_effect: {MICRONISED_CRYSTALLINE: 0.0, AMORPHOUS_DISPERSION: 25.0}
+
+  - response: content_uniformity_rsd_percent
+    unit: '%'
+    direction: MINIMISE
+    maximum: 5.0
+    noise_sigma: 0.22
+    true_response:
+      intercept: 4.760
+      terms:
+        - {factor: blend_time, coef: -0.110}
+        - {factor: api_d50_um, coef: 0.040}
+      # Content uniformity improves with blending and then gets worse again:
+      # continued blending with magnesium stearate over-lubricates and a blend of
+      # unlike particle sizes starts to segregate. This is the classic curved
+      # factor, and a two-level design CANNOT fit it -- the centre points detect
+      # the curvature and the study has to say so rather than extrapolating a
+      # straight line to the edge of the range.
+      quadratic:
+        blend_time: 0.055
+    form_effect: {MICRONISED_CRYSTALLINE: 0.0, AMORPHOUS_DISPERSION: 0.0}
+
+# Derringer-Suich desirability. Each response is scaled to 0-1 against its
+# specification and the overall figure is their geometric mean, so a response
+# that fails outright takes the whole point to zero rather than being averaged
+# away. That is the property that makes a compromise optimum meaningful.
+optimisation:
+  method: DESIRABILITY
+  #: Weight per response, applied as an exponent on its individual desirability.
+  weights:
+    dissolution_30min_percent: 2.0
+    ejection_force_n: 1.0
+    tablet_hardness_n: 1.0
+    friability_percent: 1.0
+    disintegration_time_min: 0.5
+    content_uniformity_rsd_percent: 1.0
+  #: Grid resolution per factor when searching the fitted surface.
+  grid_points: 21
+  #: Significance threshold, in standard errors, for the centre-point curvature
+  #: test. A factor with detected curvature is held at its centre rather than
+  #: optimised, because extrapolating a straight-line fit across a curved surface
+  #: to the edge of the range is how a screening design produces a confidently
+  #: wrong setpoint.
+  curvature_threshold: 2.0
+  #: The plant runs whole numbers, so the optimum is rounded before it becomes a
+  #: setpoint. The tolerance below is what verify-spine allows between the
+  #: selected optimum and the process parameter the plant declares.
+  setpoint_tolerance:
+    # Wide enough to cover the spread of the fitted optimum across seeds -- the
+    # effects are fitted from noisy runs, so the selected setting moves by a few
+    # tenths of a kilonewton from study to study. A tolerance tighter than that
+    # spread would fail for reasons that have nothing to do with the plant.
+    main_compression_force: 0.70
+    blend_time: 1.00
+
+studies:
+  - study_id: DOE-0001
+    title: Formulation and process screening for Nelvorasib 60 mg tablets
+    prototypes: [FRM-0001, FRM-0003]
+    started: 2025-11-10
+    analyst: ANL-01
+    method_id: MTH-0001

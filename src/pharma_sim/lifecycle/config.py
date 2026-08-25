@@ -37,6 +37,18 @@ class DrugProduct(Strict):
     formulation: Ident
 
 
+class SetpointLink(Strict):
+    process_parameter: Ident
+    doe_factor: Ident
+
+
+class ProcessDevelopment(Strict):
+    doe_study: Ident
+    formulation: Ident
+    product_id: Ident
+    setpoints: list[SetpointLink]
+
+
 class QcMethodLink(Strict):
     qc_parameter: Ident
     method_id: Ident
@@ -84,6 +96,7 @@ class StubBatches(Strict):
 class LifecycleConfig(Strict):
     substance: Ident
     drug_products: list[DrugProduct]
+    process_development: ProcessDevelopment
     qc_methods: list[QcMethodLink]
     imp: ImpConfig
     randomisation: RandomisationConfig

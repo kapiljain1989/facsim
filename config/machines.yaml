@@ -1152,7 +1152,7 @@ equipment_classes:
       - tag: main_compression_force
         process_parameter: true
         unit: kN
-        baseline: 11.5
+        baseline: 12.7
         sigma: 0.28
         rho: 0.86
         drift_per_day: -0.012

@@ -26,6 +26,7 @@ from typing import Any, Iterable
 from pharma_sim.engine.ids import IdFactory
 from pharma_sim.engine.rng import RngRegistry
 from pharma_sim.lab.loader import load_lab_config
+from pharma_sim.lab.doe import DoeOutput, run_doe
 from pharma_sim.lab.stability import StabilityOutput, run_stability
 from pharma_sim.lab.validation import ValidationOutput, ValidationRunner
 
@@ -56,6 +57,14 @@ _TABLES = (
     "stability_shelf_life",
     "stability_injections",
     "stability_peaks",
+    "formulation_prototypes",
+    "preformulation_compatibility",
+    "doe_runs",
+    "doe_observations",
+    "doe_effects",
+    "doe_prototypes",
+    "doe_curvature",
+    "doe_optimum",
 )
 
 
@@ -381,6 +390,15 @@ def main() -> int:
         print(output.summary())
         print()
 
+    # ---------------------------------------------------------------- DoE
+    doe_outputs: list[DoeOutput] = []
+    for study in config.doe.studies:
+        print(f"running {study.study_id}  {study.title}")
+        result = run_doe(config, study, RngRegistry(args.seed), ids)
+        doe_outputs.append(result)
+        print(result.summary())
+        print()
+
     # ---------------------------------------------------------------- stability
     stability_batches = _stability_batches(config, args.manufacturing_export)
     stability_outputs: list[StabilityOutput] = []
@@ -402,6 +420,45 @@ def main() -> int:
     combined["system_suitability"] = [row for out in outputs for row in out.suitability]
     combined["validation_results"] = [row for out in outputs for row in out.results]
     combined["audit_trail"] = [row for out in outputs for row in out.audit]
+    combined["formulation_prototypes"] = [
+        {
+            "formulation_id": p.formulation_id,
+            "name": p.name,
+            "route": p.route,
+            "role": p.role,
+            "api_form": p.api_form or "",
+            "api_d50_um": p.api_d50_um,
+            "matches": p.matches or "",
+            "components": len(p.composition_percent),
+            **{f"pct_{k}": v for k, v in p.composition_percent.items()},
+        }
+        for p in config.formulations.prototypes
+    ]
+    combined["preformulation_compatibility"] = [
+        {
+            "substance_id": config.formulations.preformulation.substance,
+            "excipient_id": row.excipient_id,
+            "outcome": row.outcome,
+            "degradation_percent_4wk": row.degradation_percent_4wk,
+        }
+        for row in config.formulations.preformulation.compatibility
+    ]
+    combined["doe_runs"] = [r for o in doe_outputs for r in o.runs]
+    combined["doe_observations"] = [r for o in doe_outputs for r in o.observations]
+    combined["doe_effects"] = [r for o in doe_outputs for r in o.effects]
+    combined["doe_prototypes"] = [r for o in doe_outputs for r in o.prototype_summary]
+    combined["doe_curvature"] = [r for o in doe_outputs for r in o.curvature]
+    # The selected settings. This is the row the plant's process parameters are
+    # checked against, so it is written on its own rather than buried in a summary.
+    combined["doe_optimum"] = [
+        {
+            "study_id": o.study_id,
+            "selected_formulation": o.selected_formulation,
+            "reason": o.selection_reason,
+            **{f"optimum_{name}": value for name, value in sorted(o.optimum.items())},
+        }
+        for o in doe_outputs
+    ]
     combined["stability_samples"] = [r for o in stability_outputs for r in o.samples]
     combined["stability_tests"] = [r for o in stability_outputs for r in o.tests]
     combined["stability_results"] = [r for o in stability_outputs for r in o.results]

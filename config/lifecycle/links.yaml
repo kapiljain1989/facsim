@@ -25,6 +25,19 @@ drug_products:
     strength_mg: 0.0
     formulation: FRM-0002
 
+# Which process settings the development work chose, and which plant product
+# runs them. verify-spine checks that the plant's declared process parameters
+# match the optimum the design of experiments selected -- otherwise the DoE is
+# decoration and the plant is running numbers nobody chose.
+process_development:
+  doe_study: DOE-0001
+  formulation: FRM-0001
+  product_id: PRD-NVR060
+  #: Plant process parameters that came from the DoE, and the factor each maps to.
+  setpoints:
+    - {process_parameter: main_compression_force, doe_factor: main_compression_force}
+    - {process_parameter: blend_time, doe_factor: blend_time}
+
 # Which analytical method measures which of the plant's QC parameters. This is
 # the join that lets the plant's QC precision be checked against the precision
 # the method actually demonstrated in validation.

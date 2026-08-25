@@ -250,7 +250,10 @@ products:
         blend_time: {target: 24.0, min: 20.0, max: 28.0, unit: min}
         rpm: {target: 12.0, min: 10.0, max: 14.0, unit: rpm}
       CONTAINED_COMPRESSION:
-        main_compression_force: {target: 11.5, min: 9.5, max: 13.5, unit: kN}
+        # Selected by DOE-0001. The screening study's desirability optimum
+        # sits at 12.7 kN across seeds; below about 12 the tablet is too
+        # friable and above about 13.5 dissolution falls away.
+        main_compression_force: {target: 12.7, min: 10.7, max: 14.7, unit: kN}
         turret_speed: {target: 34.0, min: 28.0, max: 40.0, unit: rpm}
         tablet_weight: {target: 210.0, min: 201.6, max: 218.4, unit: mg}
       CONTAINED_COATING:
@@ -290,7 +293,10 @@ products:
         blend_time: {target: 24.0, min: 20.0, max: 28.0, unit: min}
         rpm: {target: 12.0, min: 10.0, max: 14.0, unit: rpm}
       CONTAINED_COMPRESSION:
-        main_compression_force: {target: 11.5, min: 9.5, max: 13.5, unit: kN}
+        # Selected by DOE-0001. The screening study's desirability optimum
+        # sits at 12.7 kN across seeds; below about 12 the tablet is too
+        # friable and above about 13.5 dissolution falls away.
+        main_compression_force: {target: 12.7, min: 10.7, max: 14.7, unit: kN}
         turret_speed: {target: 34.0, min: 28.0, max: 40.0, unit: rpm}
         tablet_weight: {target: 210.0, min: 201.6, max: 218.4, unit: mg}
       CONTAINED_COATING:

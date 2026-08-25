@@ -422,7 +422,10 @@ parameters:
     health_sensitivity: -0.35
     sample_size: 10
     transfer:
-      intercept: 35.6
+      # Intercept recalibrated when DOE-0001 moved the compression setpoint from
+      # 11.5 to 12.7 kN. The convention here is that nominal inputs land exactly
+      # on target, so a setpoint change means this number changes with it.
+      intercept: 28.16
       terms:
         - {input: main_compression_force, coef: 6.20}
         - {input: turret_speed, coef: -0.350}

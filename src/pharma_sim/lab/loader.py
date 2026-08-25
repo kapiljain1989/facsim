@@ -222,6 +222,103 @@ def _lint(config: LabConfig, collector: IssueCollector) -> None:
                 collector.add("stability.yaml", f"protocols.{protocol.protocol_id}.instruments",
                               f"unknown instrument {instrument_id}", "")
 
+    formulations = config.formulations
+    doe = config.doe
+    excipients = {e.excipient_id for e in config.substances.excipients}
+    factor_names = {f.name for f in doe.factors}
+    #: Inputs a response may read beyond the design factors.
+    derived_inputs = {"api_d50_um"}
+    response_names = {r.response for r in doe.responses}
+
+    if formulations.preformulation.substance not in substances:
+        collector.add("formulations.yaml", "preformulation.substance",
+                      f"unknown substance {formulations.preformulation.substance}", "")
+    for row in formulations.preformulation.compatibility:
+        if row.excipient_id not in excipients:
+            collector.add("formulations.yaml", "preformulation.compatibility",
+                          f"unknown excipient {row.excipient_id}", "")
+    for prototype in formulations.prototypes:
+        total = sum(prototype.composition_percent.values())
+        if abs(total - 100.0) > 0.5:
+            collector.add(
+                "formulations.yaml", f"prototypes.{prototype.formulation_id}",
+                f"composition sums to {total:.2f}%, not 100%",
+                "a formulation has to account for the whole tablet",
+            )
+        for component in prototype.composition_percent:
+            if component not in excipients and component not in substances:
+                collector.add(
+                    "formulations.yaml", f"prototypes.{prototype.formulation_id}",
+                    f"{component} is neither a declared excipient nor a substance", "",
+                )
+        if prototype.role == "ACTIVE" and prototype.api_form is None:
+            collector.add("formulations.yaml", f"prototypes.{prototype.formulation_id}",
+                          "an active prototype needs an api_form", "")
+        if prototype.matches and formulations.prototype(prototype.matches) is None:
+            collector.add("formulations.yaml", f"prototypes.{prototype.formulation_id}.matches",
+                          f"unknown prototype {prototype.matches}", "")
+
+    forms = {
+        prototype.api_form
+        for prototype in formulations.prototypes
+        if prototype.api_form
+    }
+    for response in doe.responses:
+        for term in response.true_response.terms:
+            if term.factor not in factor_names | derived_inputs:
+                collector.add(
+                    "doe.yaml", f"responses.{response.response}.true_response",
+                    f"{term.factor} is neither a design factor nor a derived input",
+                    f"factors are: {', '.join(sorted(factor_names))}",
+                )
+        for form in response.form_effect:
+            if form not in forms:
+                collector.add("doe.yaml", f"responses.{response.response}.form_effect",
+                              f"no prototype has api_form {form}", "")
+        if response.direction == "TARGET" and response.target is None:
+            collector.add("doe.yaml", f"responses.{response.response}",
+                          "a TARGET response needs a target", "")
+        if response.direction == "MAXIMISE" and response.minimum is None:
+            collector.add("doe.yaml", f"responses.{response.response}",
+                          "a MAXIMISE response needs a minimum", "")
+        if response.direction == "MINIMISE" and response.maximum is None:
+            collector.add("doe.yaml", f"responses.{response.response}",
+                          "a MINIMISE response needs a maximum", "")
+
+    for name in doe.optimisation.weights:
+        if name not in response_names:
+            collector.add("doe.yaml", f"optimisation.weights.{name}",
+                          "weight for a response that is not declared", "")
+    for name in response_names:
+        if name not in doe.optimisation.weights:
+            collector.add(
+                "doe.yaml", f"optimisation.weights.{name}",
+                "no weight declared for this response",
+                "an unweighted response is silently excluded from the optimum",
+            )
+    for name in doe.optimisation.setpoint_tolerance:
+        if name not in factor_names:
+            collector.add("doe.yaml", f"optimisation.setpoint_tolerance.{name}",
+                          f"{name} is not a design factor", "")
+
+    expected_runs = 2 ** (doe.design.factors - doe.design.fraction)
+    if expected_runs < doe.design.factors + 1:
+        collector.add("doe.yaml", "design",
+                      f"{expected_runs} runs cannot estimate "
+                      f"{doe.design.factors} main effects and an intercept", "")
+
+    for study in doe.studies:
+        for formulation_id in study.prototypes:
+            if formulations.prototype(formulation_id) is None:
+                collector.add("doe.yaml", f"studies.{study.study_id}.prototypes",
+                              f"unknown prototype {formulation_id}", "")
+        if study.method_id not in methods:
+            collector.add("doe.yaml", f"studies.{study.study_id}.method_id",
+                          f"unknown method {study.method_id}", "")
+        if study.analyst not in analysts:
+            collector.add("doe.yaml", f"studies.{study.study_id}.analyst",
+                          f"unknown analyst {study.analyst}", "")
+
     for validation in config.validations.validations:
         if validation.method_id not in methods:
             collector.add("validation.yaml", f"{validation.validation_id}.method_id",

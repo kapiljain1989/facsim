@@ -357,11 +357,78 @@ def spine_metrics(root: Path) -> dict[str, float]:
     return out
 
 
+def process_development_metrics(root: Path) -> dict[str, float]:
+    """Does the plant run the settings the development work chose?
+
+    Read from the laboratory export's selected optimum and the plant's declared
+    process parameters. If these drift apart the design of experiments is
+    decoration and manufacturing is running numbers nobody selected -- which is
+    exactly the state this whole link was built to end.
+    """
+    out: dict[str, float] = {}
+    optimum = _read(root / "doe_optimum.csv")
+    if not optimum:
+        return out
+
+    links_path = Path("config/lifecycle/links.yaml")
+    products_path = Path("config/products.yaml")
+    doe_path = Path("config/lab/doe.yaml")
+    if not (links_path.exists() and products_path.exists() and doe_path.exists()):
+        return out
+
+    links = yaml.safe_load(links_path.read_text(encoding="utf-8"))
+    products = yaml.safe_load(products_path.read_text(encoding="utf-8"))
+    tolerances = yaml.safe_load(doe_path.read_text(encoding="utf-8"))["optimisation"][
+        "setpoint_tolerance"
+    ]
+    development = links.get("process_development")
+    if not development:
+        return out
+
+    row = next(
+        (r for r in optimum if r["study_id"] == development["doe_study"]), optimum[0]
+    )
+    product = next(
+        (
+            p
+            for p in products["products"]
+            if p["product_id"] == development["product_id"]
+        ),
+        None,
+    )
+    if product is None:
+        return out
+
+    declared: dict[str, float] = {}
+    for parameters in product["process_parameters"].values():
+        for name, window in parameters.items():
+            declared[name] = float(window["target"])
+
+    agreements: list[float] = []
+    for setpoint in development["setpoints"]:
+        chosen = _number(row, f"optimum_{setpoint['doe_factor']}")
+        running = declared.get(setpoint["process_parameter"])
+        if chosen is None or running is None:
+            continue
+        tolerance = float(tolerances.get(setpoint["doe_factor"], 0.0))
+        agreements.append(1.0 if abs(chosen - running) <= tolerance else 0.0)
+    if agreements:
+        out["doe_setpoint_agreement"] = stats.fmean(agreements)
+
+    selected = row.get("selected_formulation")
+    if selected:
+        out["doe_selected_declared_formulation"] = float(
+            selected == development["formulation"]
+        )
+    return out
+
+
 _SECTIONS: dict[str, Callable[[Path], dict[str, float]]] = {
     "manufacturing": manufacturing_metrics,
     "laboratory": laboratory_metrics,
     "clinical": clinical_metrics,
     "spine": spine_metrics,
+    "process_development": process_development_metrics,
 }
 
 
@@ -383,6 +450,7 @@ def main() -> int:
         "laboratory": args.lab,
         "clinical": args.clinical,
         "spine": args.clinical,
+        "process_development": args.lab,
     }
 
     failures: list[str] = []

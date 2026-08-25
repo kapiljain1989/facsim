@@ -1,0 +1,107 @@
+# Preformulation, the prototype formulations, and the design of experiments that
+# chooses between them.
+#
+# The point of this file is that the plant's process parameters stop being
+# declared numbers. Compression force, blend time and the excipient levels in
+# products.yaml become the OUTCOME of a designed experiment, and
+# `verify-spine` checks that the plant is actually running the optimum the
+# development work selected.
+#
+# Nelvorasib is a poorly soluble weak base, so the formulation problem is real:
+# it needs enough disintegrant and wetting agent to dissolve, and enough
+# compression to survive handling, and those pull in opposite directions.
+
+preformulation:
+  substance: SUB-0001
+  # Read from substances.yaml rather than restated. What is declared here is what
+  # the study MEASURED, which is a subset with error on it.
+  studies:
+    - {study: PH_SOLUBILITY, technique: "Shake-flask, 24 h, 37 C", outcome_from: ph_solubility_mg_ml}
+    - {study: POLYMORPH_SCREEN, technique: "XRPD, DSC and TGA across 24 solvents", outcome_from: polymorphs}
+    - {study: ATROPISOMER_STABILITY, technique: Chiral HPLC after thermal stress, outcome_from: stereo}
+    - {study: EXCIPIENT_COMPATIBILITY, technique: "Binary mixes, 40 C / 75% RH, 4 weeks", outcome_from: null}
+  # Binary compatibility outcomes. The incompatibility is the interesting one: a
+  # reducing sugar with a primary or secondary amine gives the Maillard reaction,
+  # and this molecule has a secondary amine.
+  compatibility:
+    - {excipient_id: EXC-MCC102, outcome: COMPATIBLE, degradation_percent_4wk: 0.11}
+    - {excipient_id: EXC-MANN, outcome: COMPATIBLE, degradation_percent_4wk: 0.14}
+    - {excipient_id: EXC-CCS, outcome: COMPATIBLE, degradation_percent_4wk: 0.19}
+    - {excipient_id: EXC-HPC, outcome: COMPATIBLE, degradation_percent_4wk: 0.16}
+    - {excipient_id: EXC-SLS, outcome: COMPATIBLE, degradation_percent_4wk: 0.31}
+    - {excipient_id: EXC-CSD, outcome: COMPATIBLE, degradation_percent_4wk: 0.09}
+    - {excipient_id: EXC-MGST, outcome: COMPATIBLE, degradation_percent_4wk: 0.22}
+    - {excipient_id: EXC-HPMCAS, outcome: COMPATIBLE, degradation_percent_4wk: 0.13}
+
+# Two development routes for the same drug product, and the placebo that has to
+# match whichever wins.
+prototypes:
+  - formulation_id: FRM-0001
+    name: Micronised crystalline, direct compression
+    route: DIRECT_COMPRESSION
+    role: ACTIVE
+    api_form: MICRONISED_CRYSTALLINE
+    api_d50_um: 12.0
+    description: >-
+      Simplest route and the one to beat. Relies on disintegrant and a wetting
+      agent to get a poorly soluble weak base into solution.
+    composition_percent:
+      SUB-0001: 28.6
+      EXC-MCC102: 39.7
+      EXC-MANN: 19.8
+      EXC-CCS: 5.9
+      EXC-HPC: 3.4
+      EXC-SLS: 1.0
+      EXC-CSD: 0.6
+      EXC-MGST: 1.0
+
+  - formulation_id: FRM-0003
+    name: Spray-dried amorphous dispersion
+    route: SPRAY_DRIED_DISPERSION
+    role: ACTIVE
+    api_form: AMORPHOUS_DISPERSION
+    api_d50_um: 35.0
+    description: >-
+      Dissolves far better because the API is amorphous in a polymer matrix, at
+      the cost of a spray dryer, a physical-stability risk on storage, and a
+      larger tablet. Chosen only if the simpler route cannot meet dissolution.
+    composition_percent:
+      SUB-0001: 17.1
+      EXC-HPMCAS: 39.9
+      EXC-MCC102: 28.4
+      EXC-CCS: 6.0
+      EXC-CSD: 0.6
+      EXC-MGST: 1.0
+      EXC-MANN: 7.0
+
+  - formulation_id: FRM-0002
+    name: Matching placebo
+    route: DIRECT_COMPRESSION
+    role: PLACEBO
+    matches: FRM-0001
+    api_form: null
+    api_d50_um: null
+    description: >-
+      Appearance-matched to the selected active. The API is replaced by filler,
+      so the excipient levels differ while the tablet does not.
+    composition_percent:
+      EXC-MCC102: 56.9
+      EXC-MANN: 31.2
+      EXC-CCS: 5.9
+      EXC-HPC: 3.4
+      EXC-SLS: 1.0
+      EXC-CSD: 0.6
+      EXC-MGST: 1.0
+
+# The tablet the plant has to make. The DoE optimum is checked against these, and
+# against the process parameters declared for PRD-NVR060 in products.yaml.
+target_product:
+  product_id: PRD-NVR060
+  strength_mg: 60.0
+  tablet_weight_mg: 210.0
+  specification:
+    tablet_hardness_n: {target: 95.0, minimum: 70.0, maximum: 120.0}
+    friability_percent: {maximum: 1.0}
+    disintegration_time_min: {maximum: 15.0}
+    dissolution_30min_percent: {minimum: 80.0, target: 88.0}
+    content_uniformity_rsd_percent: {maximum: 5.0}
