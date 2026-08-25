@@ -33,6 +33,7 @@ Three domains and the joins between them:
 - [Quick start](#quick-start)
 - [The three domains](#the-three-domains)
 - [The lifecycle spine](#the-lifecycle-spine)
+- [Are the numbers the right numbers?](#are-the-numbers-the-right-numbers)
 - [What it produces](#what-it-produces)
 - [The three design principles](#the-three-design-principles)
 - [Configuration](#configuration)
@@ -150,6 +151,31 @@ spine integrity (manufacturing batches)
   ...
   13/13 checks passed
 ```
+
+### Are the numbers the right numbers?
+
+Integrity checks say every row resolves. That is not the same as the data being
+plausible, so there is a second gate:
+
+```bash
+.venv/bin/python scripts/verify_realism.py --plant data/plant/export \
+    --lab data/lab --clinical data/clinical
+```
+
+Thirty-two metrics across the three domains and the spine, each checked against
+an envelope declared in [`config/realism.yaml`](config/realism.yaml) with a
+written reason. A value outside its envelope is a failure, and a metric that
+cannot be computed at all is also a failure — a check that silently stops running
+draws no attention to itself.
+
+Some envelopes come from published ranges: objective response rate per arm,
+median progression-free survival, investigator-versus-central-review discordance,
+system suitability precision. Others exist to catch a specific regression, and
+say so. The one guarding the exposure–response relationship is there because the
+first version of that model **inverted** it — slowing only the tumour shrinkage
+gave a shallower nadir, and since RECIST judges progression relative to the
+nadir, less drug produced better survival. Nothing in the code looked wrong. That
+envelope is what would catch it coming back.
 
 ---
 
@@ -770,7 +796,8 @@ pharma_factory_simulator/
 │   ├── api/                      FastAPI app, read-only service layer, live hub
 │   │   └── static/               dashboard: index.html, app.js, charts.js, styles.css
 ├── scripts/                      generate_dataset, generate_lab_dataset,
-│                                 generate_clinical_dataset, phase0_digest,
+│                                 generate_clinical_dataset, verify_realism,
+│                                 phase0_digest,
 │                                 initialize_factory, mqtt_consumer, trace_batch
 ├── tests/                        592 tests
 ├── docker/mosquitto.conf

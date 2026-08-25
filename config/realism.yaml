@@ -1,0 +1,255 @@
+# Expected envelopes for the generated data.
+#
+# The plan's second credibility gate. Referential integrity says every row
+# resolves; this says the numbers are the right numbers. A value outside its
+# envelope is a build failure, not something to notice later.
+#
+# Every envelope has a reason. Where the bound comes from published ranges that
+# is said; where it exists to catch a specific regression, the regression is
+# named — because an envelope nobody can justify is a number somebody will widen
+# the first time it fails.
+
+manufacturing:
+  - metric: nvr_assay_mean_percent
+    low: 99.0
+    high: 101.0
+    why: >-
+      A released tablet assays close to label claim. Drift here means the QC
+      transfer intercept no longer lands on target.
+
+  - metric: nvr_assay_rsd_percent
+    low: 0.3
+    high: 2.0
+    why: >-
+      Below 0.3% would mean the analytical contribution stopped being added;
+      above 2% the batch would not be releasable.
+
+  - metric: nvr_assay_rsd_over_method_floor
+    low: 1.0
+    high: 6.0
+    why: >-
+      The observed precision must EXCEED the method's own precision, because a
+      result carries the measurement's error as well as the product's. Below 1.0
+      means the analytical variance is no longer in the QC model at all — the
+      whole point of the method-to-QC link.
+
+  - metric: nvr_released_fraction
+    low: 0.75
+    high: 1.0
+    why: >-
+      Most clinical supply batches release. A collapse here means a QC
+      transfer is evaluating at its intercept, which is what happened when the
+      contained sensors were missing their process-parameter flag.
+
+  - metric: nvr_batches
+    low: 40
+    high: 400
+    why: >-
+      Enough batches to supply the study and stock the stability programme.
+
+laboratory:
+  - metric: validation_failed_criteria
+    low: 0
+    high: 6
+    why: >-
+      A validation that passes everything has no robustness study worth
+      reading; one that fails widely is not a validatable method.
+
+  - metric: sst_area_rsd_percent
+    low: 0.05
+    high: 2.0
+    why: >-
+      USP <621> asks for 2.0% or better on replicate standard injections.
+
+  - metric: critical_pair_resolution
+    low: 1.8
+    high: 4.0
+    why: >-
+      The method's suitability limit is 2.0 at nominal conditions, with
+      measurement scatter either side.
+
+  - metric: stability_shelf_life_months
+    low: 12
+    high: 36
+    why: >-
+      Shorter would not supply the study; longer than the study length cannot
+      be demonstrated.
+
+  - metric: stability_impurity_slope_ratio
+    low: 0.7
+    high: 1.4
+    why: >-
+      The fitted impurity slope against the declared degradation rate. This is
+      the check that the trend is measured from chromatograms rather than drawn:
+      it recovers the configured rate to within a few percent, and a drift away
+      means integration has changed.
+
+  - metric: loq_percent_of_standard
+    low: 0.02
+    high: 0.12
+    why: >-
+      A related-substances method has to quantify at or below the 0.05%
+      reporting threshold to be fit for its specification.
+
+clinical:
+  - metric: orr_arm_a
+    low: 0.35
+    high: 0.72
+    why: >-
+      A KRAS G12C inhibitor with a platinum doublet in first line. Published
+      combinations in this setting report roughly half.
+
+  - metric: orr_arm_b
+    low: 0.15
+    high: 0.45
+    why: >-
+      Carboplatin and pemetrexed alone. A control arm outside this is either
+      unable to respond at all or is not a control arm.
+
+  - metric: orr_difference
+    low: 0.10
+    high: 0.45
+    why: >-
+      The treatment effect. Below 0.10 the study would not have been run.
+
+  - metric: median_pfs_months_arm_a
+    low: 7.0
+    high: 16.0
+    why: >-
+      Consistent with the response rate and the assessment schedule.
+
+  - metric: median_pfs_months_arm_b
+    low: 3.5
+    high: 9.0
+    why: >-
+      A platinum doublet in this setting gives five to six months.
+
+  - metric: reader_discordance
+    low: 0.03
+    high: 0.22
+    why: >-
+      Investigator against blinded central review. Published trials report
+      10-20% at the timepoint level. Below 3% means lesion selection has stopped
+      diverging and the two readers have become one.
+
+  - metric: different_target_selection
+    low: 0.20
+    high: 0.70
+    why: >-
+      The mechanism behind the discordance. If readers stop choosing different
+      lesions, the discordance figure above becomes measurement noise only.
+
+  - metric: relative_dose_intensity_arm_a
+    low: 0.70
+    high: 0.93
+    why: >-
+      A subject on a toxic combination does not receive every planned dose.
+      Above 0.93 means toxicity has stopped affecting the dose.
+
+  - metric: rdi_arm_a_below_arm_b
+    low: 1
+    high: 1
+    why: >-
+      Boolean. The arm with more severe toxicity must receive less drug. This
+      is the property the safety model exists to produce.
+
+  - metric: exposure_response_rho_arm_a
+    low: -1.0
+    high: -0.15
+    why: >-
+      Rank correlation of relative dose intensity against the deepest percentage
+      change from baseline. More drug means a deeper response, so a more negative
+      change -- the correlation is expected to be NEGATIVE. This envelope exists
+      because the first exposure model inverted the relationship: slowing only
+      the shrinkage gave a shallower nadir, and because RECIST judges progression
+      relative to the nadir, less drug produced better survival. A value near
+      zero means the coupling has stopped working; a positive one means the
+      inversion is back.
+      Depth of response is used rather than survival time because it exists for
+      every subject. Correlating against progression-free survival uses only the
+      subjects who had an event, about forty per arm, where the standard error on
+      a rank correlation is around 0.16 -- the gate would fire at random.
+
+  - metric: exposure_response_rho_arm_b
+    low: -1.0
+    high: -0.10
+    why: >-
+      The same relationship on the control arm. Weaker, because the placebo
+      contributes nothing and the exposure being varied is the chemotherapy
+      schedule rather than the investigational product, but it should still be
+      present and negative.
+
+  - metric: backbone_ae_arm_ratio
+    low: 0.75
+    high: 1.3
+    why: >-
+      Anaemia and neutropenia come from the chemotherapy both arms receive, so
+      their incidence must match. A ratio away from 1 means the adverse-event
+      profile has been scaled by arm rather than modelled by attribution.
+
+  - metric: product_ae_arm_ratio
+    low: 2.0
+    high: 8.0
+    why: >-
+      Diarrhoea and transaminase rises come from the investigational product
+      and must be markedly higher on the active arm.
+
+  - metric: serious_ae_fraction
+    low: 0.02
+    high: 0.15
+    why: >-
+      Of all adverse events. Seriousness is a regulatory criterion, not a
+      severity threshold, so most events are not serious.
+
+  - metric: grade_3_plus_fraction
+    low: 0.10
+    high: 0.35
+    why: >-
+      Fraction of all adverse events that are Grade 3 or worse, across both arms.
+      Most events on a chemotherapy doublet are mild or moderate, so this is a
+      minority of them -- but not a small one, because marrow suppression
+      routinely reaches Grade 3. Below 0.10 the toxicity would be too mild to
+      trigger any dose modification and the exposure model would have nothing to
+      act on; above 0.35 the regimen would not be tolerable.
+
+  - metric: tmf_completeness
+    low: 0.80
+    high: 0.99
+    why: >-
+      A trial master file at 100% is not one anybody has seen; below 80% would
+      not survive an inspection.
+
+  - metric: query_rate_per_form
+    low: 0.02
+    high: 0.30
+    why: >-
+      Study-wide. Above this the study would be halted for data quality.
+
+  - metric: worst_site_query_multiple
+    low: 1.8
+    high: 6.0
+    why: >-
+      One site is deliberately worse than the others. If it stops standing
+      out, the site archetypes have stopped propagating into the data.
+
+  - metric: progression_below_baseline
+    low: 1
+    high: 200
+    why: >-
+      Count of assessments where a subject progressed while still well below
+      baseline. Zero means progression is being judged against baseline rather
+      than the nadir, which is the most consequential RECIST error there is.
+
+spine:
+  - metric: spine_checks_passed
+    low: 1.0
+    high: 1.0
+    why: >-
+      Fraction. Anything below one means a kit does not trace to a batch, and
+      the lineage claim is void.
+
+  - metric: doses_traced_to_batches
+    low: 1.0
+    high: 1.0
+    why: >-
+      Fraction of dosing records resolving to a manufactured batch.

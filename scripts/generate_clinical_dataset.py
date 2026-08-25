@@ -398,6 +398,11 @@ def main() -> int:
                 "seed": args.seed,
                 "config": args.config,
                 "tables": written,
+                "spine_checks": {
+                    "passed": sum(1 for check in report.checks if check.passed),
+                    "total": len(report.checks),
+                    "linked": out.spine_linked,
+                },
             },
             indent=2,
         )

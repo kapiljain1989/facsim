@@ -28,3 +28,8 @@ schemas/
 
 # OS
 .DS_Store
+
+# Generated datasets. Reproducible from the seed, so they are not committed.
+/data/plant/
+/data/lab/
+/data/clinical/
