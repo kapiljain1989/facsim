@@ -115,3 +115,8 @@ class TopologyRegistry:
     @property
     def skill_levels(self) -> tuple[str, ...]:
         return tuple(self._config.skill_levels)
+
+    @property
+    def tenure_years(self) -> tuple[float, float]:
+        """Shortest and longest site tenure, in years."""
+        return (self._config.tenure_years_min, self._config.tenure_years_max)

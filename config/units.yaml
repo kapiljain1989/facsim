@@ -10,6 +10,12 @@ technician_role: TECHNICIAN
 qc_analyst_role: QC_ANALYST
 skill_levels: [JUNIOR, INTERMEDIATE, SENIOR]
 
+# Site tenure. hired_on is the run start minus a draw from this range, capped by
+# each person's experience_years. Keep the maximum at or below the site's own
+# age -- the earliest commissioned_from in machines.yaml is the practical bound.
+tenure_years_min: 0.25
+tenure_years_max: 7.0
+
 units:
   - id: UNIT-01
     name: Raw Material Dispensing

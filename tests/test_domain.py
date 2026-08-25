@@ -16,6 +16,7 @@ from pharma_sim.domain.plant import FactoryBuilder
 from pharma_sim.domain.sensor import Quality
 from pharma_sim.domain.shift import ShiftScheduler
 from pharma_sim.engine.rng import RngRegistry
+from pharma_sim.registry import Registries
 from pharma_sim.registry.states import IllegalTransition
 
 START = datetime(2026, 1, 1, 6, 0, 0)
@@ -504,6 +505,74 @@ class TestEmployee:
         assert Employee(**base, experience_years=2.0).inexperience > Employee(
             **base, experience_years=8.0
         ).inexperience
+
+
+class TestHireDates:
+    """A workforce is not hired on the morning the simulation starts."""
+
+    def test_hire_dates_are_spread_not_uniform(self, plant, config):
+        dates = {e.hired_on.date() for e in plant.employees.values()}
+        # The bug this guards against gave every employee the same date, making
+        # any tenure- or cohort-based query on the dataset degenerate.
+        assert len(dates) > len(plant.employees) // 2
+
+    def test_nobody_predates_the_shortest_tenure(self, plant, config):
+        floor = config.units.tenure_years_min
+        for employee in plant.employees.values():
+            tenure = (START - employee.hired_on).days / 365.25
+            assert tenure >= floor - 1e-6, employee.employee_id
+
+    def test_site_tenure_never_exceeds_industry_experience(self, plant, config):
+        """Nobody has worked at this site longer than they have worked at all."""
+        for employee in plant.employees.values():
+            tenure = (START - employee.hired_on).days / 365.25
+            assert tenure <= employee.experience_years + 1e-6, employee.employee_id
+
+    def test_tenure_respects_the_configured_ceiling(self, plant, config):
+        ceiling = config.units.tenure_years_max
+        for employee in plant.employees.values():
+            tenure = (START - employee.hired_on).days / 365.25
+            assert tenure <= ceiling + 1e-6, employee.employee_id
+
+    def test_hire_dates_are_reproducible(self, config, registries):
+        first = FactoryBuilder(config, registries, RngRegistry(42)).build(START)
+        second = FactoryBuilder(config, registries, RngRegistry(42)).build(START)
+        assert [e.hired_on for e in first.employees.values()] == [
+            e.hired_on for e in second.employees.values()
+        ]
+
+    def test_retuning_tenure_leaves_the_rest_of_the_workforce_alone(
+        self, config, registries
+    ):
+        """Tenure draws from its own RNG stream, so widening the range moves
+        hire dates and nothing else.
+
+        Were it sharing the workforce stream, raising tenure_years_max would
+        silently re-roll every name, skill and attendance value in the plant --
+        a config knob for hire dates quietly rewriting unrelated columns.
+        """
+        base = FactoryBuilder(config, registries, RngRegistry(42)).build(START)
+        widened = config.model_copy(
+            update={"units": config.units.model_copy(update={"tenure_years_max": 3.0})},
+            deep=True,
+        )
+        other = FactoryBuilder(
+            widened, Registries.build(widened), RngRegistry(42)
+        ).build(START)
+
+        assert [e.name for e in other.employees.values()] == [
+            e.name for e in base.employees.values()
+        ]
+        assert [e.experience_years for e in other.employees.values()] == [
+            e.experience_years for e in base.employees.values()
+        ]
+        assert [e.attendance_probability for e in other.employees.values()] == [
+            e.attendance_probability for e in base.employees.values()
+        ]
+        # The knob did do something.
+        assert [e.hired_on for e in other.employees.values()] != [
+            e.hired_on for e in base.employees.values()
+        ]
 
 
 class TestOee:

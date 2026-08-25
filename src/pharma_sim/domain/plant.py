@@ -265,8 +265,27 @@ class FactoryBuilder:
         def make_name() -> str:
             return f"{rng.choice(_GIVEN_NAMES)} {rng.choice(_SURNAMES)}"
 
+        tenure_rng = self._rngs.child("workforce_tenure")
+        tenure_floor, tenure_ceiling = topology.tenure_years
+
+        def hire_date(experience_years: float) -> datetime:
+            """Site tenure, bounded by the person's total industry experience.
+
+            A plant is not staffed on the morning the simulation starts, and
+            nobody has worked here longer than they have worked anywhere. The
+            mode sits at the shortest tenure because attrition leaves a real
+            workforce with more recent hires than long-serving ones.
+
+            Drawn from its own stream so that adding it leaves every other
+            workforce draw -- names, skills, experience, attendance -- unchanged.
+            """
+            ceiling = min(tenure_ceiling, max(experience_years, tenure_floor))
+            years = tenure_rng.triangular(tenure_floor, ceiling, tenure_floor)
+            return start_time - timedelta(days=years * 365.25)
+
         # Plant manager first, so EMP-0001 is the most senior person.
         manager_id = next_id()
+        manager_experience = round(rng.uniform(14.0, 26.0), 1)
         plant.employees[manager_id] = Employee(
             employee_id=manager_id,
             name=self._config.plant.plant_manager_name,
@@ -275,9 +294,9 @@ class FactoryBuilder:
             role="PLANT_MANAGER",
             skill_level=topology.skill_levels[-1],
             shift_code=shift_codes[0],
-            experience_years=round(rng.uniform(14.0, 26.0), 1),
+            experience_years=manager_experience,
             attendance_probability=0.99,
-            hired_on=start_time,
+            hired_on=hire_date(manager_experience),
         )
         plant.plant_manager_id = manager_id
 
@@ -297,6 +316,7 @@ class FactoryBuilder:
 
             for _ in range(unit_spec.manager_count):
                 employee_id = next_id()
+                unit_mgr_experience = round(rng.uniform(8.0, 20.0), 1)
                 plant.employees[employee_id] = Employee(
                     employee_id=employee_id,
                     name=make_name(),
@@ -305,10 +325,10 @@ class FactoryBuilder:
                     role=topology.manager_role,
                     skill_level=topology.skill_levels[-1],
                     shift_code=shift_codes[0],
-                    experience_years=round(rng.uniform(8.0, 20.0), 1),
+                    experience_years=unit_mgr_experience,
                     attendance_probability=round(rng.uniform(0.96, 0.995), 4),
                     machine_certifications=classes_here,
-                    hired_on=start_time,
+                    hired_on=hire_date(unit_mgr_experience),
                 )
                 unit.manager_ids.append(employee_id)
 
@@ -337,15 +357,24 @@ class FactoryBuilder:
                     experience_years=experience,
                     attendance_probability=round(rng.uniform(0.90, 0.99), 4),
                     machine_certifications=certified,
-                    hired_on=start_time,
+                    hired_on=hire_date(experience),
                 )
                 plant.employees[employee_id] = employee
                 unit.worker_ids.append(employee_id)
 
-        self._build_support_staff(plant, start_time, rng, next_id, make_name, shift_codes)
+        self._build_support_staff(
+            plant, start_time, rng, next_id, make_name, shift_codes, hire_date
+        )
 
     def _build_support_staff(
-        self, plant: Plant, start_time: datetime, rng, next_id, make_name, shift_codes: list[str]
+        self,
+        plant: Plant,
+        start_time: datetime,
+        rng,
+        next_id,
+        make_name,
+        shift_codes: list[str],
+        hire_date,
     ) -> None:
         """Maintenance technicians and QC analysts, sized from configuration."""
         topology = self._registries.topology
@@ -353,6 +382,7 @@ class FactoryBuilder:
 
         for index in range(self._config.maintenance.technician_pool):
             employee_id = next_id()
+            tech_experience = round(rng.uniform(3.0, 22.0), 1)
             plant.employees[employee_id] = Employee(
                 employee_id=employee_id,
                 name=make_name(),
@@ -361,15 +391,16 @@ class FactoryBuilder:
                 role=topology.technician_role,
                 skill_level=self._sample_skill(rng, topology.skill_levels),
                 shift_code=shift_codes[index % len(shift_codes)],
-                experience_years=round(rng.uniform(3.0, 22.0), 1),
+                experience_years=tech_experience,
                 attendance_probability=round(rng.uniform(0.93, 0.99), 4),
                 machine_certifications=all_classes,
-                hired_on=start_time,
+                hired_on=hire_date(tech_experience),
             )
 
         # One QC analyst per shift, plus one spare.
         for index in range(len(shift_codes) + 1):
             employee_id = next_id()
+            qc_experience = round(rng.uniform(2.0, 18.0), 1)
             plant.employees[employee_id] = Employee(
                 employee_id=employee_id,
                 name=make_name(),
@@ -378,9 +409,9 @@ class FactoryBuilder:
                 role=topology.qc_analyst_role,
                 skill_level=self._sample_skill(rng, topology.skill_levels),
                 shift_code=shift_codes[index % len(shift_codes)],
-                experience_years=round(rng.uniform(2.0, 18.0), 1),
+                experience_years=qc_experience,
                 attendance_probability=round(rng.uniform(0.94, 0.99), 4),
-                hired_on=start_time,
+                hired_on=hire_date(qc_experience),
             )
 
     @staticmethod

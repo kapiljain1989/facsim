@@ -417,6 +417,13 @@ class UnitsConfig(Strict):
     technician_role: Ident = "TECHNICIAN"
     qc_analyst_role: Ident = "QC_ANALYST"
     skill_levels: list[Ident] = Field(default_factory=lambda: ["JUNIOR", "INTERMEDIATE", "SENIOR"])
+    #: Site tenure in years. ``hired_on`` is the run start minus a draw from this
+    #: range, capped by each person's own ``experience_years`` -- nobody has
+    #: worked at this site longer than they have worked at all. Keep the maximum
+    #: at or below the site's age; the earliest ``commissioned_from`` in
+    #: machines.yaml is the practical bound.
+    tenure_years_min: NonNegative = 0.25
+    tenure_years_max: Positive = 7.0
 
 
 # --------------------------------------------------------------------------- #
